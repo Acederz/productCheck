@@ -39,8 +39,18 @@ fi
 echo "==> 更新后端依赖"
 run_as_app "cd '${APP_DIR}' && source '${VENV}/bin/activate' && pip install -r backend/requirements.txt"
 
-echo "==> 构建前端"
-run_as_app "cd '${APP_DIR}/frontend' && npm install && npm run build"
+# 默认不在服务器构建前端（frontend/dist 由 Windows 本机构建后提交到 Git）
+# 若服务器已装 Node 且要在服务器构建：SKIP_FRONTEND_BUILD=0 bash deploy/scripts/deploy_update.sh
+SKIP_FRONTEND_BUILD="${SKIP_FRONTEND_BUILD:-1}"
+if [[ "${SKIP_FRONTEND_BUILD}" == "1" ]]; then
+  echo "==> 跳过服务器前端构建（使用 Git 中的 frontend/dist）"
+  if [[ ! -f "${APP_DIR}/frontend/dist/index.html" ]]; then
+    echo "警告: frontend/dist/index.html 不存在，请在本机执行 scripts/build_frontend.bat 后提交推送"
+  fi
+else
+  echo "==> 构建前端（服务器本地 npm build）"
+  run_as_app "cd '${APP_DIR}/frontend' && npm install && npm run build"
+fi
 
 echo "==> 检查存储与日志目录权限"
 run_as_app "cd '${APP_DIR}' && mkdir -p storage/uploads storage/exports logs && chmod -R u+rwX storage logs"

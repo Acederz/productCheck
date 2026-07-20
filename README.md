@@ -139,10 +139,10 @@ CentOS 推荐：**Nginx + Gunicorn（WSGI）+ MySQL**。
 摘要：
 
 1. 服务器配置 `backend/.env`（`FLASK_ENV=production`）并 `python manage.py init-db`
-2. `cd frontend && npm run build` 生成静态文件
+2. **本机** `scripts\build_frontend.bat` 构建前端，`frontend/dist` 随 Git 同步（服务器无需 Node.js）
 3. systemd 启动 Gunicorn：`wsgi:app`（监听 `127.0.0.1:5000`）
 4. Nginx 托管 `frontend/dist`，反代 `/api` 到 Gunicorn
-5. 日常更新可用：`deploy/scripts/deploy_update.sh`  
+5. 日常更新：`deploy/scripts/deploy_update.sh`（默认跳过服务器 npm build）
 6. 部署前环境检查：`deploy/scripts/check_env.sh`
 
 配置样例目录：`deploy/nginx/`、`deploy/systemd/`。
@@ -157,7 +157,14 @@ CentOS 推荐：**Nginx + Gunicorn（WSGI）+ MySQL**。
 
 ## 推送到 GitHub
 
-`.gitignore` 已排除：`node_modules`、`.venv`、`backend/.env`、`frontend/dist`、上传/导出文件等。
+`.gitignore` 已排除：`node_modules`、`.venv`、`backend/.env`、上传/导出文件等。  
+`frontend/dist` **会提交到 Git**（本机构建，服务器无需 Node.js）。
+
+**本机构建前端：**
+
+```bat
+scripts\build_frontend.bat
+```
 
 **一键上传（Windows，推荐 PowerShell）：**
 

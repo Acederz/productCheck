@@ -100,8 +100,7 @@ curl --version | head -n 1
 | Git | 任意较新版本 | `dnf -y install git` |
 | Python | 3.10+ | `dnf -y install python3.11 python3.11-devel python3-pip` |
 | venv | 内置模块 | `dnf -y install python3.11`（或对应版本 venv 包） |
-| Node.js | 18+ | 见 2.1 中 NodeSource 安装 |
-| npm | 随 Node 安装 | 同上 |
+| Node.js | 18+（仅本机构建需要） | Windows 本机安装；服务器可不装 |
 | MySQL | 8.0+ | `dnf -y install mysql-server && systemctl enable --now mysqld` |
 | Nginx | 任意较新版本 | 你已安装，可跳过 |
 | gcc | 编译部分 Python 包 | `dnf -y install gcc openssl-devel libffi-devel` |
@@ -111,8 +110,75 @@ curl --version | head -n 1
 
 ### 2.1 基础软件（缺什么装什么）
 
+#### 推荐：本机构建前端（服务器无需 Node.js）
+
+`frontend/dist` 已纳入 Git。在 **Windows 本机** 构建后提交推送，服务器 `git pull` 即可，**不必在 CentOS 安装 Node.js**。
+
+**本机（Windows）每次改前端后：**
+
+```bat
+scripts\build_frontend.bat
+git add frontend/dist
+git commit -m "build: update frontend dist"
+git push
+```
+
+**服务器更新：**
+
 ```bash
-# CentOS 8 / Stream（推荐）
+cd /home/topuser/productCheck
+git pull
+# 默认 deploy_update.sh 已跳过 npm build；仅后端变更时需：
+systemctl restart product-check
+# 或一键：bash deploy/scripts/deploy_update.sh
+```
+
+---
+
+#### （可选）在服务器安装 Node.js 18
+
+仅当你希望在服务器上执行 `npm run build` 时才需要安装，见下方 NodeSource / nvm 步骤。
+
+```bash
+# 1. 安装依赖
+sudo yum install -y curl ca-certificates gcc-c++ make
+
+# 2. 添加 NodeSource 18 源并安装
+curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
+sudo yum install -y nodejs
+
+# 3. 验证（应显示 v18.x 或更高）
+node -v
+npm -v
+```
+
+若 NodeSource 安装失败，可用 **nvm**（用户级安装，同样可用）：
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+source ~/.bashrc
+nvm install 18
+nvm use 18
+node -v
+npm -v
+```
+
+> **说明**：默认采用本机构建 + Git 同步 `frontend/dist`，服务器可不装 Node。
+
+#### CentOS 7 其它基础软件
+
+```bash
+sudo yum -y update
+sudo yum -y install epel-release
+sudo yum -y install git gcc openssl-devel libffi-devel curl
+# MySQL、Python 3.10+ 请按实际环境安装（CentOS 7 默认 python3 可能较旧）
+# Nginx 已安装可跳过
+```
+
+#### CentOS 8 / Stream
+
+```bash
+# CentOS 8 / Stream
 sudo dnf -y update
 sudo dnf -y install epel-release
 sudo dnf -y install git mysql-server \
@@ -120,11 +186,8 @@ sudo dnf -y install git mysql-server \
   gcc openssl-devel libffi-devel
 # Nginx 已安装可跳过；若未安装：sudo dnf -y install nginx
 
-# Node.js 18+（用于服务器上构建前端；也可在本机构建后只上传 dist）
 curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
 sudo dnf -y install nodejs
-
-# CentOS 7 若无 python3.11，可用 python3（需 ≥3.10）或从源码/SCL 安装
 ```
 
 启动并设置开机自启：
@@ -224,14 +287,20 @@ python manage.py init-db
 
 成功后可用默认管理员登录（见 `.env` 中 `ADMIN_USERNAME` / `ADMIN_PASSWORD`）。
 
-### 3.5 构建前端
+### 3.5 前端静态文件（本机构建，已随 Git 同步）
 
-```bash
-cd /home/topuser/productCheck/frontend
-npm install
-npm run build
-# 生成 frontend/dist ，由 Nginx 托管
+默认方案：**不在服务器构建**。`git clone` 后应已有 `frontend/dist`，Nginx 直接托管即可。
+
+若仓库中尚无 dist，在 Windows 本机执行：
+
+```bat
+scripts\build_frontend.bat
+git add frontend/dist
+git commit -m "build: frontend dist"
+git push
 ```
+
+然后在服务器 `git pull`。
 
 ### 3.6 配置 Gunicorn（systemd）
 
