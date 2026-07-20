@@ -22,8 +22,10 @@ if errorlevel 1 (
 if not exist ".git" (
   echo [STEP] git init
   git init
-  git branch -M main
 )
+
+echo [STEP] ensure branch main
+git branch -M main
 
 echo [STEP] git add
 git add .

@@ -24,8 +24,9 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 if (-not (Test-Path ".git")) {
     Write-Host "STEP: git init" -ForegroundColor Yellow
     git init
-    git branch -M main
 }
+Write-Host "STEP: ensure branch main" -ForegroundColor Yellow
+git branch -M main
 
 Write-Host "STEP: git add (node_modules, .venv, .env, dist are ignored)" -ForegroundColor Yellow
 git add .
