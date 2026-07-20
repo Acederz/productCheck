@@ -38,20 +38,21 @@ if ($confirm -notmatch '^[Yy]$') {
 }
 
 git diff --cached --quiet 2>$null
-if ($LASTEXITCODE -ne 0) {
+$hasStagedChanges = ($LASTEXITCODE -ne 0)
+if ($hasStagedChanges) {
     Write-Host "STEP: git commit" -ForegroundColor Yellow
     git commit -m $Message
 } else {
     Write-Host "INFO: No changes to commit, push only." -ForegroundColor Gray
 }
 
-git remote get-url origin 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "STEP: git remote add origin" -ForegroundColor Yellow
-    git remote add origin $RepoUrl
-} else {
+$remotes = @(git remote)
+if ($remotes -contains 'origin') {
     Write-Host "STEP: git remote set-url origin" -ForegroundColor Yellow
     git remote set-url origin $RepoUrl
+} else {
+    Write-Host "STEP: git remote add origin" -ForegroundColor Yellow
+    git remote add origin $RepoUrl
 }
 
 Write-Host "STEP: git push -u origin main" -ForegroundColor Yellow
