@@ -140,8 +140,8 @@ CentOS 推荐：**Nginx + uWSGI（WSGI）+ MySQL**。
 
 1. 服务器配置 `backend/.env`（`FLASK_ENV=production`）并 `python manage.py init-db`
 2. **本机** `scripts\build_frontend.bat` 构建前端，`frontend/dist` 随 Git 同步（服务器无需 Node.js）
-3. systemd 启动 uWSGI：`deploy/uwsgi/product_check.ini`（监听 `127.0.0.1:5000`）
-4. Nginx 托管 `frontend/dist`，反代 `/api` 到 uWSGI
+3. systemd 启动 uWSGI：`deploy/uwsgi/product_check.ini`（监听 `127.0.0.1:5174`）
+4. Nginx 监听 `5173` 托管前端，反代 `/api` 到 `127.0.0.1:5174`
 5. 日常更新：`deploy/scripts/deploy_update.sh`（默认跳过服务器 npm build）
 6. 部署前环境检查：`deploy/scripts/check_env.sh`
 

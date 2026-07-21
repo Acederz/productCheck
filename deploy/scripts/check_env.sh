@@ -170,7 +170,7 @@ fi
 if systemctl list-unit-files 2>/dev/null | grep -q '^product-check.service'; then
   if systemctl is-active product-check >/dev/null 2>&1; then
     ok "product-check 服务运行中"
-    if curl -fsS "http://127.0.0.1:5000/api/health" >/dev/null 2>&1; then
+    if curl -fsS "http://127.0.0.1:5174/api/health" >/dev/null 2>&1; then
       ok "后端健康检查 /api/health 正常"
     else
       warn "product-check 已运行但 /api/health 无响应"

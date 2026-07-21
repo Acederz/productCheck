@@ -12,9 +12,9 @@
 浏览器
   │
   ▼
-Nginx :80
+Nginx :5173
   ├─ /           → 前端静态文件 frontend/dist
-  └─ /api/       → 反代到 127.0.0.1:5000
+  └─ /api/       → 反代到 127.0.0.1:5174
                       │
                       ▼
                  uWSGI（WSGI）
@@ -337,7 +337,7 @@ python -c "import flask; print(flask.__version__)"
 | `chdir` | `.../backend` | 工作目录，才能找到 `wsgi.py` |
 | `module` | `wsgi:app` | 加载 `wsgi.py` 里的 `app` |
 | `virtualenv` | `.../.venv` | 使用项目虚拟环境里的依赖 |
-| `http-socket` | `127.0.0.1:5000` | 给 Nginx 反代用 |
+| `http-socket` | `127.0.0.1:5174` | 给 Nginx 反代用 |
 
 **systemd 启动命令：**
 
@@ -353,7 +353,7 @@ mkdir -p /home/topuser/productCheck/logs
 # 先手动试跑（确认能起来再交给 systemd）
 cd /home/topuser/productCheck/backend
 /usr/local/python312/bin/uwsgi --ini /home/topuser/productCheck/deploy/uwsgi/product_check.ini
-# 另开一个终端：curl http://127.0.0.1:5000/api/health
+# 另开一个终端：curl http://127.0.0.1:5174/api/health
 # 成功后 Ctrl+C 结束手动进程
 
 # 安装 systemd
@@ -362,7 +362,7 @@ systemctl daemon-reload
 systemctl enable --now product-check
 systemctl status product-check
 
-curl http://127.0.0.1:5000/api/health
+curl http://127.0.0.1:5174/api/health
 # 日志：tail -f /home/topuser/productCheck/logs/uwsgi.log
 ```
 
@@ -376,16 +376,15 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-浏览器访问：`http://服务器IP/`  
-接口健康检查：`http://服务器IP/api/health`
+浏览器访问：`http://服务器IP:5173/`  
+接口健康检查：`http://服务器IP:5173/api/health`（经 Nginx）或 `http://127.0.0.1:5174/api/health`（直连 uWSGI）
 
 ### 3.8 防火墙（若开了 firewalld）
 
 ```bash
-sudo firewall-cmd --permanent --add-service=http
-# 若上 HTTPS：
-# sudo firewall-cmd --permanent --add-service=https
-sudo firewall-cmd --reload
+# 对外开放前端端口 5173（后端 5174 建议只本机访问，不必开防火墙）
+firewall-cmd --permanent --add-port=5173/tcp
+firewall-cmd --reload
 ```
 
 ### 3.9（可选）HTTPS
@@ -462,7 +461,7 @@ pip install -r backend/requirements.txt
 cd frontend && npm install && npm run build && cd ..
 
 systemctl restart product-check
-curl http://127.0.0.1:5000/api/health
+curl http://127.0.0.1:5174/api/health
 ```
 
 ### 5.4 不同类型改动怎么发版
@@ -551,8 +550,9 @@ mysql -u product_admin -p product_check < /home/topuser/backup/xxx.sql
 
 - 看后端是否起来：`systemctl status product-check`
 - 看错误日志：`journalctl -u product-check -n 100`
-- 确认 Nginx `proxy_pass` 端口与 uWSGI `http-socket` 一致（默认 `127.0.0.1:5000`）
+- 确认 Nginx `proxy_pass` 端口与 uWSGI `http-socket` 一致（默认 `127.0.0.1:5174`）
 - 看 uWSGI 日志：`tail -f /home/topuser/productCheck/logs/uwsgi.log`
+- 浏览器访问前端：`http://服务器IP:5173/`
 
 ### Q2：上传 Excel 失败 / 413
 
@@ -590,7 +590,7 @@ chmod -R u+rwX /home/topuser/productCheck/storage /home/topuser/productCheck/log
 1. `.env` 权限：`chmod 600 backend/.env`，不要提交到 Git  
 2. `SECRET_KEY` / `JWT_SECRET_KEY` / 数据库密码使用强随机值  
 3. 首次登录后修改管理员密码；停用默认弱口令  
-4. uWSGI 只绑定 `127.0.0.1`，不要直接对公网开放 5000 端口  
+4. uWSGI 只绑定 `127.0.0.1:5174`，不要对公网开放 5174；对外只开前端 `5173`
 5. 生产环境建议改用非 root 专用账号运行（当前按你的要求使用 root）  
 6. 能上 HTTPS 尽量上；内网也建议限制来源 IP  
 7. 定期备份数据库与 `storage/`

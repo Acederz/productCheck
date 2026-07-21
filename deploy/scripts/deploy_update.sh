@@ -67,6 +67,6 @@ fi
 
 echo "==> 健康检查"
 sleep 1
-curl -fsS "http://127.0.0.1:5000/api/health" && echo || echo "健康检查失败，请查看 journalctl -u ${SERVICE_NAME}"
+curl -fsS "http://127.0.0.1:5174/api/health" && echo || echo "健康检查失败，请查看 journalctl -u ${SERVICE_NAME}"
 
 echo "==> 更新完成"
