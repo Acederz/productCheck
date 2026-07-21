@@ -1,6 +1,6 @@
 # CentOS 部署与代码更新手册
 
-适用架构：**Nginx（静态前端 + 反代） + Gunicorn（WSGI 跑 Flask） + MySQL 8.0**
+适用架构：**Nginx（静态前端 + 反代） + uWSGI（WSGI 跑 Flask） + MySQL 8.0**
 
 本文面向：第一次把本项目部署到 CentOS，以及以后改代码、发版本时怎么更新。
 
@@ -17,7 +17,7 @@ Nginx :80
   └─ /api/       → 反代到 127.0.0.1:5000
                       │
                       ▼
-                 Gunicorn（WSGI）
+                 uWSGI（WSGI）
                       │
                       ▼
                    Flask 后端
@@ -29,7 +29,7 @@ Nginx :80
 | 组件 | 作用 |
 |------|------|
 | Nginx | 对外提供网页；把 `/api` 转给后端 |
-| Gunicorn | 用 WSGI 协议跑 Flask（生产不要用 `python run.py`） |
+| uWSGI | 用 WSGI 协议跑 Flask（生产不要用 `python run.py`） |
 | systemd | 开机自启、崩溃重启后端 |
 | MySQL | 业务数据 |
 | storage/ | 上传 Excel、导出文件存放目录 |
@@ -40,10 +40,11 @@ Nginx :80
 deploy/
 ├── env.production.example          # 生产环境变量模板
 ├── nginx/product_check.conf        # Nginx 配置样例
+├── uwsgi/product_check.ini         # uWSGI 配置
 ├── systemd/product-check.service   # systemd 服务样例
 ├── scripts/check_env.sh            # 环境依赖检查脚本
 └── scripts/deploy_update.sh        # 一键更新脚本
-backend/wsgi.py                     # Gunicorn 入口
+backend/wsgi.py                     # uWSGI / Gunicorn 共用入口
 ```
 
 ---
@@ -235,7 +236,7 @@ EXIT;
 ```bash
 mkdir -p /home/topuser
 cd /home/topuser
-git clone <你的仓库地址> productCheck
+git clone https://github.com/Acederz/productCheck productCheck
 cd /home/topuser/productCheck
 ```
 
@@ -302,22 +303,67 @@ git push
 
 然后在服务器 `git pull`。
 
-### 3.6 配置 Gunicorn（systemd）
+### 3.6 配置 uWSGI（systemd）
+
+#### 3.6.1 使用系统 uWSGI（本项目默认：`/usr/local/python312/bin/uwsgi`）
+
+**前提：虚拟环境必须用同一套 Python 3.12 创建**，否则 uWSGI 加载不到 `.venv` 里的包。
+
+```bash
+# 1）确认系统 uwsgi
+/usr/local/python312/bin/uwsgi --version
+/usr/local/python312/bin/python3 --version
+
+# 2）若还没有 .venv，或以前用别的 python 建的，请重建（会清空原 venv）
+cd /home/topuser/productCheck
+# 备份后重建（可选：先 mv .venv .venv.bak）
+/usr/local/python312/bin/python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -r backend/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 3）确认 Flask 等在 venv 中
+python -c "import flask; print(flask.__version__)"
+```
+
+**uWSGI 配置文件位置：**
+
+`/home/topuser/productCheck/deploy/uwsgi/product_check.ini`
+
+关键项说明：
+
+| 配置项 | 值 | 含义 |
+|--------|-----|------|
+| `chdir` | `.../backend` | 工作目录，才能找到 `wsgi.py` |
+| `module` | `wsgi:app` | 加载 `wsgi.py` 里的 `app` |
+| `virtualenv` | `.../.venv` | 使用项目虚拟环境里的依赖 |
+| `http-socket` | `127.0.0.1:5000` | 给 Nginx 反代用 |
+
+**systemd 启动命令：**
+
+```
+ExecStart=/usr/local/python312/bin/uwsgi --ini /home/topuser/productCheck/deploy/uwsgi/product_check.ini
+```
+
+#### 3.6.2 启动服务
 
 ```bash
 mkdir -p /home/topuser/productCheck/logs
-sudo cp /home/topuser/productCheck/deploy/systemd/product-check.service /etc/systemd/system/
-# 若路径/用户不同，先编辑该文件再拷贝
-sudo systemctl daemon-reload
-sudo systemctl enable --now product-check
-sudo systemctl status product-check
-```
 
-自测后端：
+# 先手动试跑（确认能起来再交给 systemd）
+cd /home/topuser/productCheck/backend
+/usr/local/python312/bin/uwsgi --ini /home/topuser/productCheck/deploy/uwsgi/product_check.ini
+# 另开一个终端：curl http://127.0.0.1:5000/api/health
+# 成功后 Ctrl+C 结束手动进程
 
-```bash
+# 安装 systemd
+cp /home/topuser/productCheck/deploy/systemd/product-check.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now product-check
+systemctl status product-check
+
 curl http://127.0.0.1:5000/api/health
-# 应返回 JSON，code=200
+# 日志：tail -f /home/topuser/productCheck/logs/uwsgi.log
 ```
 
 ### 3.7 配置 Nginx（已安装 Nginx 时）
@@ -353,12 +399,12 @@ sudo firewall-cmd --reload
 
 | 目的 | 命令 |
 |------|------|
-| 看后端状态 | `sudo systemctl status product-check` |
-| 重启后端 | `sudo systemctl restart product-check` |
-| 看后端日志 | `sudo journalctl -u product-check -f` |
-| 看 Gunicorn 日志 | `tail -f /home/topuser/productCheck/logs/error.log` |
-| 重载 Nginx | `sudo nginx -t && sudo systemctl reload nginx` |
-| 看 Nginx 错误 | `sudo tail -f /var/log/nginx/product_check_error.log` |
+| 看后端状态 | `systemctl status product-check` |
+| 重启后端 | `systemctl restart product-check` |
+| 看后端日志 | `journalctl -u product-check -f` |
+| 看 uWSGI 日志 | `tail -f /home/topuser/productCheck/logs/uwsgi.log` |
+| 重载 Nginx | `nginx -t && systemctl reload nginx` |
+| 看 Nginx 错误 | `tail -f /var/log/nginx/product_check_error.log` |
 
 ---
 
@@ -371,7 +417,7 @@ sudo firewall-cmd --reload
     → 自测通过
     → git commit / push
     → 服务器拉取并构建
-    → 重启 Gunicorn
+    → 重启 uWSGI（systemctl restart product-check）
     → Nginx 自动拿到新前端（dist 已覆盖）
     → 冒烟验证
 ```
@@ -423,7 +469,7 @@ curl http://127.0.0.1:5000/api/health
 
 | 改动类型 | 要做什么 |
 |----------|----------|
-| 只改前端页面 | `frontend` 构建即可；**不必**重启 Gunicorn（刷新浏览器强刷 `Ctrl+F5`） |
+| 只改前端页面 | `frontend` 构建即可；**不必**重启 uWSGI（刷新浏览器强刷 `Ctrl+F5`） |
 | 只改后端 Python | `pip install`（如有新依赖）+ **重启** `product-check` |
 | 改了 `requirements.txt` | 必须 `pip install -r ...` 再重启 |
 | 改了 Nginx 配置 | `nginx -t` 后 `reload nginx` |
@@ -505,7 +551,8 @@ mysql -u product_admin -p product_check < /home/topuser/backup/xxx.sql
 
 - 看后端是否起来：`systemctl status product-check`
 - 看错误日志：`journalctl -u product-check -n 100`
-- 确认 Nginx `proxy_pass` 端口与 Gunicorn `--bind` 一致（默认 `127.0.0.1:5000`）
+- 确认 Nginx `proxy_pass` 端口与 uWSGI `http-socket` 一致（默认 `127.0.0.1:5000`）
+- 看 uWSGI 日志：`tail -f /home/topuser/productCheck/logs/uwsgi.log`
 
 ### Q2：上传 Excel 失败 / 413
 
@@ -534,7 +581,7 @@ chmod -R u+rwX /home/topuser/productCheck/storage /home/topuser/productCheck/log
 
 1. 本机 `cd frontend && npm run build`
 2. 把 `frontend/dist` 整目录上传覆盖服务器对应目录
-3. 若后端也有改动，仍需重启 Gunicorn
+3. 若后端也有改动，仍需重启 uWSGI（`systemctl restart product-check`）
 
 ---
 
@@ -543,7 +590,7 @@ chmod -R u+rwX /home/topuser/productCheck/storage /home/topuser/productCheck/log
 1. `.env` 权限：`chmod 600 backend/.env`，不要提交到 Git  
 2. `SECRET_KEY` / `JWT_SECRET_KEY` / 数据库密码使用强随机值  
 3. 首次登录后修改管理员密码；停用默认弱口令  
-4. Gunicorn 只绑定 `127.0.0.1`，不要直接对公网开放 5000 端口  
+4. uWSGI 只绑定 `127.0.0.1`，不要直接对公网开放 5000 端口  
 5. 生产环境建议改用非 root 专用账号运行（当前按你的要求使用 root）  
 6. 能上 HTTPS 尽量上；内网也建议限制来源 IP  
 7. 定期备份数据库与 `storage/`
@@ -555,7 +602,7 @@ chmod -R u+rwX /home/topuser/productCheck/storage /home/topuser/productCheck/log
 | 环境 | 怎么跑 |
 |------|--------|
 | Windows 开发 | `scripts\dev.bat` 或 `npm run dev`（见 [Windows首次运行手册](./Windows首次运行手册.md)） |
-| CentOS 生产 | Nginx + Gunicorn（本文） |
+| CentOS 生产 | Nginx + uWSGI（本文） |
 
 开发机改代码 → Git → 服务器按第五节更新即可。
 

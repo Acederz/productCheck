@@ -365,7 +365,7 @@ productCheck/
 
 1. `backend\.env` 含数据库密码，**不要**发给他人或上传到公开仓库
 2. 正式使用前请修改默认管理员密码
-3. 本手册为**本地开发**流程；上线 Linux 服务器需另行配置 Nginx + Gunicorn
+3. 本手册为**本地开发**流程；上线 Linux 服务器见 [CentOS部署与更新手册](./CentOS部署与更新手册.md)（Nginx + uWSGI）
 
 ---
 

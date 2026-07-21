@@ -1,36 +1,28 @@
 [Unit]
-Description=ProductCheck Flask API (Gunicorn WSGI)
+Description=ProductCheck Flask API (uWSGI)
 After=network.target mysqld.service
 Wants=mysqld.service
 
 [Service]
-Type=notify
+Type=simple
 User=root
 Group=root
 WorkingDirectory=/home/topuser/productCheck/backend
 Environment=FLASK_ENV=production
 Environment=PYTHONUTF8=1
 Environment=PYTHONIOENCODING=utf-8
-# 加载 .env 由应用本身完成；也可在此追加 EnvironmentFile=
 # EnvironmentFile=/home/topuser/productCheck/backend/.env
 
-ExecStart=/home/topuser/productCheck/.venv/bin/gunicorn \
-    --workers 4 \
-    --threads 2 \
-    --bind 127.0.0.1:5000 \
-    --timeout 300 \
-    --access-logfile /home/topuser/productCheck/logs/access.log \
-    --error-logfile /home/topuser/productCheck/logs/error.log \
-    --capture-output \
-    wsgi:app
+# 使用系统已安装的 uWSGI（Python 3.12）
+ExecStart=/usr/local/python312/bin/uwsgi \
+    --ini /home/topuser/productCheck/deploy/uwsgi/product_check.ini
 
 ExecReload=/bin/kill -s HUP $MAINPID
-KillMode=mixed
+KillSignal=SIGQUIT
 TimeoutStopSec=30
 Restart=always
 RestartSec=5
 
-# 安全加固（按需调整）
 NoNewPrivileges=true
 PrivateTmp=true
 

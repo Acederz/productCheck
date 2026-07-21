@@ -121,16 +121,28 @@ else
   warn "curl 未安装（健康检查脚本需要，建议安装）"
 fi
 
-# --- 项目虚拟环境与 Gunicorn ---
+# --- 项目虚拟环境与 uWSGI ---
 if [[ -d "$VENV" ]]; then
   ok "虚拟环境存在: ${VENV}"
-  if [[ -x "${VENV}/bin/gunicorn" ]]; then
-    ok "Gunicorn: $("${VENV}/bin/gunicorn" --version 2>&1 | head -n 1)"
+  if [[ -x "${VENV}/bin/uwsgi" ]]; then
+    ok "venv uWSGI: $("${VENV}/bin/uwsgi" --version 2>&1 | head -n 1)"
   else
-    warn "虚拟环境中 Gunicorn 未安装（pip install -r backend/requirements.txt）"
+    warn "虚拟环境中 uwsgi 未安装（pip install -r backend/requirements.txt）"
   fi
 else
   warn "虚拟环境不存在: ${VENV}（首次部署需 python -m venv .venv）"
+fi
+
+if command -v uwsgi >/dev/null 2>&1; then
+  ok "系统 PATH 中的 uwsgi: $(command -v uwsgi) ($(uwsgi --version 2>&1 | head -n 1))"
+else
+  warn "系统 PATH 未找到 uwsgi（可用 venv 内的，或 yum install uwsgi）"
+fi
+
+if [[ -f "${APP_DIR}/deploy/uwsgi/product_check.ini" ]]; then
+  ok "uWSGI 配置存在: deploy/uwsgi/product_check.ini"
+else
+  warn "缺少 deploy/uwsgi/product_check.ini"
 fi
 
 # --- 项目目录 ---

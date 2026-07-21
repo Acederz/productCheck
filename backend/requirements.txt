@@ -8,4 +8,5 @@ cryptography==43.0.3
 python-dotenv==1.1.0
 bcrypt==4.2.1
 openpyxl==3.1.5
-gunicorn==23.0.0
+# 生产环境使用系统 uWSGI：/usr/local/python312/bin/uwsgi
+# 不必再 pip install uwsgi
