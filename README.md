@@ -76,6 +76,13 @@ cd ..
 
 默认管理员账号见 `.env` 中 `ADMIN_USERNAME` / `ADMIN_PASSWORD`（默认 `admin` / `admin123`）。
 
+清空业务数据、只保留管理员与分类规则：
+
+```bat
+cd backend
+python manage.py reset-keep-admin-rules --yes
+```
+
 ### 4. 一键启动（只需 1 个终端）
 
 ```bat

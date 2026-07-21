@@ -288,6 +288,14 @@ python manage.py init-db
 
 成功后可用默认管理员登录（见 `.env` 中 `ADMIN_USERNAME` / `ADMIN_PASSWORD`）。
 
+若库中已有脏数据、只想保留管理员与规则：
+
+```bash
+cd /home/topuser/productCheck/backend
+source ../.venv/bin/activate
+python manage.py reset-keep-admin-rules --yes
+```
+
 ### 3.5 前端静态文件（本机构建，已随 Git 同步）
 
 默认方案：**不在服务器构建**。`git clone` 后应已有 `frontend/dist`，Nginx 直接托管即可。
@@ -403,7 +411,7 @@ firewall-cmd --reload
 | 看后端日志 | `journalctl -u product-check -f` |
 | 看 uWSGI 日志 | `tail -f /home/topuser/productCheck/logs/uwsgi.log` |
 | 重载 Nginx | `nginx -t && systemctl reload nginx` |
-| 看 Nginx 错误 | `tail -f /var/log/nginx/product_check_error.log` |
+| 看 Nginx 错误 | `tail -f /usr/local/nginx/logs/product_check_error.log` |
 
 ---
 
