@@ -133,21 +133,22 @@ export function normalizeRowFields(row) {
   return row
 }
 
-function firstPathValue(value) {
-  const list = Array.isArray(value) ? value : normalizeMultiField(value, 'category_large')
-  return list.length ? list[0] : undefined
+/** 将已选值规范为路径数组（多选全部传给后端，取下级并集） */
+function pathValues(value, field) {
+  const list = normalizeMultiField(value, field)
+  return list.length ? list : undefined
 }
 
 function buildPath(row) {
   return {
-    大类: firstPathValue(row.category_large),
-    区隔: row.category_segment?.length ? row.category_segment : undefined,
-    类别: firstPathValue(row.category_type),
-    主材质: firstPathValue(row.material_main),
-    辅材质: firstPathValue(row.material_aux),
-    包装方式: firstPathValue(row.packaging),
-    尺寸: firstPathValue(row.size),
-    卷数: firstPathValue(row.roll_count),
+    大类: pathValues(row.category_large, 'category_large'),
+    区隔: pathValues(row.category_segment, 'category_segment'),
+    类别: pathValues(row.category_type, 'category_type'),
+    主材质: pathValues(row.material_main, 'material_main'),
+    辅材质: pathValues(row.material_aux, 'material_aux'),
+    包装方式: pathValues(row.packaging, 'packaging'),
+    尺寸: pathValues(row.size, 'size'),
+    卷数: pathValues(row.roll_count, 'roll_count'),
   }
 }
 

@@ -63,20 +63,8 @@
           @selection-change="onSelectionChange"
         >
           <el-table-column type="selection" width="45" fixed="left" />
-          <el-table-column prop="product_id" label="宝贝ID" width="130" fixed="left" />
-          <el-table-column
-            prop="product_name"
-            label="宝贝名称"
-            width="160"
-            fixed="left"
-            show-overflow-tooltip
-          />
-          <el-table-column prop="platform" label="平台" width="110" />
-          <el-table-column prop="assignee_name" label="操作员" width="100">
-            <template #default="{ row }">{{ row.assignee_name || '-' }}</template>
-          </el-table-column>
-
-          <el-table-column label="主图" width="90">
+          <!-- 展示字段固定到文描图：主图为首列，不展示宝贝ID -->
+          <el-table-column label="主图" width="90" fixed="left">
             <template #default="{ row }">
               <el-popover
                 v-if="row.main_image"
@@ -100,16 +88,22 @@
               <span v-else>-</span>
             </template>
           </el-table-column>
-
-          <el-table-column label="产品属性" width="200">
+          <el-table-column
+            prop="product_name"
+            label="宝贝名称"
+            width="160"
+            fixed="left"
+            show-overflow-tooltip
+          />
+          <el-table-column prop="platform" label="平台" width="110" fixed="left" />
+          <el-table-column label="产品属性" width="200" fixed="left">
             <template #default="{ row }">
               <div class="product-attr-cell" :title="formatProductAttr(row.product_attr)">
                 {{ formatProductAttr(row.product_attr) }}
               </div>
             </template>
           </el-table-column>
-
-          <el-table-column label="宝贝文描图" width="85">
+          <el-table-column label="宝贝文描图" width="85" fixed="left">
             <template #default="{ row }">
               <el-button
                 link
@@ -121,6 +115,9 @@
                 查看({{ getDescCount(row) }})
               </el-button>
             </template>
+          </el-table-column>
+          <el-table-column prop="assignee_name" label="操作员" width="100">
+            <template #default="{ row }">{{ row.assignee_name || '-' }}</template>
           </el-table-column>
 
           <el-table-column prop="is_operating" label="是否经营" width="90" />

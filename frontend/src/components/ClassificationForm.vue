@@ -225,21 +225,21 @@ const optionKeyMap = {
   packaging: 'packaging',
 }
 
-function firstPathValue(value) {
-  const list = normalizeMultiField(value, 'category_large')
-  return list.length ? list[0] : undefined
+function pathValues(value, field) {
+  const list = normalizeMultiField(value, field)
+  return list.length ? list : undefined
 }
 
 function buildPath() {
   return {
-    大类: firstPathValue(form.category_large),
-    区隔: form.category_segment?.length ? form.category_segment : undefined,
-    类别: firstPathValue(form.category_type),
-    主材质: firstPathValue(form.material_main),
-    辅材质: firstPathValue(form.material_aux),
-    包装方式: firstPathValue(form.packaging),
-    尺寸: firstPathValue(form.size),
-    卷数: firstPathValue(form.roll_count),
+    大类: pathValues(form.category_large, 'category_large'),
+    区隔: pathValues(form.category_segment, 'category_segment'),
+    类别: pathValues(form.category_type, 'category_type'),
+    主材质: pathValues(form.material_main, 'material_main'),
+    辅材质: pathValues(form.material_aux, 'material_aux'),
+    包装方式: pathValues(form.packaging, 'packaging'),
+    尺寸: pathValues(form.size, 'size'),
+    卷数: pathValues(form.roll_count, 'roll_count'),
   }
 }
 

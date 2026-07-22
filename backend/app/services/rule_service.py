@@ -308,32 +308,48 @@ class RuleService:
         wb.close()
         return result
 
+    @staticmethod
+    def _as_selected_list(selected) -> list:
+        """将路径上的已选值规范为字符串列表（支持多选并集）。"""
+        if selected is None or selected == "" or selected == []:
+            return []
+        if isinstance(selected, (list, tuple, set)):
+            return [str(item).strip() for item in selected if item is not None and str(item).strip()]
+        text = str(selected).strip()
+        if not text:
+            return []
+        # 兼容逗号分隔的多选字符串
+        if "，" in text or "," in text:
+            parts = [p.strip() for p in text.replace("，", ",").split(",")]
+            return [p for p in parts if p]
+        return [text]
+
     def _filter_nodes(self, version_id: int, path: dict) -> list:
-        """按已选路径过滤主规则节点。"""
+        """
+        按已选路径过滤主规则节点。
+
+        多选字段取并集：某一路径字段若选了多个值，节点在该字段上
+        只要落在已选集合内即算匹配（各字段之间仍为 AND）。
+        """
         nodes = ClassificationRuleNode.query.filter_by(
             version_id=version_id, is_active=True
         ).all()
         matched = []
-        segments = path.get("区隔") or []
-        if isinstance(segments, str):
-            segments = [segments]
 
         for node in nodes:
             ok = True
             for field in CASCADE_FIELDS:
                 attr = FIELD_TO_NODE_ATTR[field]
-                selected = path.get(field)
-                node_val = getattr(node, attr)
-                if selected is None or selected == "" or selected == []:
+                selected_list = self._as_selected_list(path.get(field))
+                if not selected_list:
                     continue
-                if field == "区隔":
-                    if segments and node_val not in segments:
-                        ok = False
-                        break
-                else:
-                    if str(node_val) != str(selected):
-                        ok = False
-                        break
+                node_val = getattr(node, attr)
+                if node_val is None or str(node_val).strip() == "":
+                    ok = False
+                    break
+                if str(node_val) not in selected_list:
+                    ok = False
+                    break
             if ok:
                 matched.append(node)
         return matched
@@ -347,22 +363,19 @@ class RuleService:
         return score
 
     def _match_field_rule(self, rule: ClassificationFieldRule, path: dict) -> bool:
-        """判断补充规则是否匹配当前路径（仅匹配该字段之前的路径前缀）。"""
-        segments = path.get("区隔") or []
-        if isinstance(segments, str):
-            segments = [segments]
+        """
+        判断补充规则是否匹配当前路径（仅匹配该字段之前的路径前缀）。
 
+        多选时：规则路径值落在已选并集内即匹配。
+        """
         attrs = FIELD_MATCH_ATTRS.get(rule.field_name, list(ATTR_TO_PATH_FIELD.keys()))
         for attr in attrs:
-            field, is_segment = ATTR_TO_PATH_FIELD[attr]
+            field, _is_segment = ATTR_TO_PATH_FIELD[attr]
             rule_val = getattr(rule, attr)
             if not rule_val:
                 continue
-            path_val = path.get(field)
-            if is_segment:
-                if not segments or str(rule_val) not in [str(s) for s in segments]:
-                    return False
-            elif path_val is None or str(path_val) != str(rule_val):
+            selected_list = self._as_selected_list(path.get(field))
+            if not selected_list or str(rule_val) not in selected_list:
                 return False
         return True
 
@@ -391,20 +404,21 @@ class RuleService:
         if field not in CASCADE_FIELDS:
             return {"field": field, "options": [], "input_mode": "select", "hint": ""}
 
-        # 辅材质/包装方式：可能为文本框或下拉，提示词均来自补充规则 hint
+        # 辅材质/包装方式：可能为文本框或下拉；多选并集时优先展示下拉并合并选项
         field_rule_hint = ""
         if field in ("辅材质", "包装方式"):
             matched = self._matched_field_rules(field, path, version.id)
             text_rules = [r for r in matched if r.input_mode == "0"]
             select_rules = [r for r in matched if r.input_mode == "1"]
-            if text_rules:
+            # 仅当全部匹配为文本模式时才切文本框，否则取下拉选项并集
+            if text_rules and not select_rules:
                 return {
                     "field": field,
                     "options": [],
                     "input_mode": "text",
                     "hint": self._pick_first_unique_hint(text_rules),
                 }
-            field_rule_hint = self._pick_first_unique_hint(select_rules)
+            field_rule_hint = self._pick_first_unique_hint(select_rules or text_rules)
 
         nodes = self._filter_nodes(version.id, path)
         attr = FIELD_TO_NODE_ATTR[field]
@@ -456,7 +470,13 @@ class RuleService:
 
         if field == "卷数":
             modes = {n.roll_input_mode for n in nodes if n.roll_input_mode in ("0", "1")}
-            mode = modes.pop() if len(modes) == 1 else (modes.pop() if modes else "0")
+            # 多选并集：任一路径为下拉则按下拉汇总选项
+            if "1" in modes:
+                mode = "1"
+            elif "0" in modes:
+                mode = "0"
+            else:
+                mode = "0"
             if mode == "1":
                 meta = self._meta_from_field_rules("卷数", path, version.id, default_mode="select")
                 meta["multiple"] = False
@@ -471,7 +491,12 @@ class RuleService:
 
         if field == "总入数":
             modes = {n.total_input_mode for n in nodes if n.total_input_mode in ("0", "1")}
-            mode = modes.pop() if len(modes) == 1 else (modes.pop() if modes else "0")
+            if "1" in modes:
+                mode = "1"
+            elif "0" in modes:
+                mode = "0"
+            else:
+                mode = "0"
             if mode == "1":
                 meta = self._meta_from_field_rules("总入数", path, version.id, default_mode="select")
                 meta["multiple"] = False

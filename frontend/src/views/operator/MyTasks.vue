@@ -67,12 +67,8 @@
           @selection-change="onSelectionChange"
         >
           <el-table-column type="selection" width="45" fixed="left" />
-          <el-table-column prop="product_id" label="宝贝ID" width="130" fixed="left" />
-          <el-table-column prop="product_name" label="宝贝名称" width="160" fixed="left" show-overflow-tooltip />
-          <el-table-column prop="platform" label="平台" width="110" />
-
-          <!-- 展示字段：主图 / 产品属性 / 宝贝文描图 -->
-          <el-table-column label="主图" width="90">
+          <!-- 展示字段固定到文描图：主图为首列，不展示宝贝ID -->
+          <el-table-column label="主图" width="90" fixed="left">
             <template #default="{ row }">
               <el-popover
                 v-if="row.main_image"
@@ -96,16 +92,16 @@
               <span v-else>-</span>
             </template>
           </el-table-column>
-
-          <el-table-column label="产品属性" width="220">
+          <el-table-column prop="product_name" label="宝贝名称" width="160" fixed="left" show-overflow-tooltip />
+          <el-table-column prop="platform" label="平台" width="110" fixed="left" />
+          <el-table-column label="产品属性" width="220" fixed="left">
             <template #default="{ row }">
               <div class="product-attr-cell" :title="formatProductAttr(row.product_attr)">
                 {{ formatProductAttr(row.product_attr) }}
               </div>
             </template>
           </el-table-column>
-
-          <el-table-column label="宝贝文描图" width="85">
+          <el-table-column label="宝贝文描图" width="85" fixed="left">
             <template #default="{ row }">
               <el-button
                 link
@@ -488,8 +484,8 @@ const draftFlags = reactive({})
 const draftTimers = {}
 const userStore = useUserStore()
 
-/** 左侧固定列大致宽度：勾选 + 宝贝ID + 宝贝名称 */
-const FIXED_LEFT_WIDTH = 45 + 130 + 160
+/** 左侧固定列大致宽度：勾选 + 主图 + 名称 + 平台 + 产品属性 + 文描图 */
+const FIXED_LEFT_WIDTH = 45 + 90 + 160 + 110 + 220 + 85
 /** 点击列后尽量再露出约两列的宽度 */
 const REVEAL_FOLLOWING_WIDTH = 280
 
