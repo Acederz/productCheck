@@ -331,6 +331,7 @@
                   filterable
                   :disabled="row.is_operating === '否'"
                   @visible-change="(v) => v && ensureTailOptions(row, getRowState(row.id))"
+                  @change="() => scheduleDraft(row)"
                 >
                   <el-option v-for="o in getRowState(row.id).options.roll" :key="o" :label="o" :value="o" />
                 </el-select>
@@ -358,6 +359,7 @@
                   filterable
                   :disabled="row.is_operating === '否'"
                   @visible-change="(v) => v && ensureTailOptions(row, getRowState(row.id))"
+                  @change="() => scheduleDraft(row)"
                 >
                   <el-option v-for="o in getRowState(row.id).options.total" :key="o" :label="o" :value="o" />
                 </el-select>

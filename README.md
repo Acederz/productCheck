@@ -158,6 +158,8 @@ CentOS 推荐：**Nginx + uWSGI（WSGI）+ MySQL**。
 
 - [Windows 首次运行手册](docs/Windows首次运行手册.md)
 - [CentOS 部署与更新手册](docs/CentOS部署与更新手册.md)
+- [管理员操作指南（新手版）](docs/管理员操作指南.md)
+- [操作员操作指南（新手版）](docs/操作员操作指南.md)
 - [需求说明](需求相关/需求说明.md)
 - [需求确认问题](需求相关/需求确认问题.md)
 - [系统设计](需求相关/系统设计.md)
