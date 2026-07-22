@@ -36,11 +36,8 @@ pnpm-debug.log*
 
 # frontend/dist 纳入 Git：本机构建，服务器 git pull 即可，无需安装 Node.js
 
-# ========== 业务数据文件（上传/导出，勿进仓库）==========
-storage/uploads/*
-storage/exports/*
-!storage/uploads/.gitkeep
-!storage/exports/.gitkeep
+# ========== 业务数据与本地文件目录（整目录不上传）==========
+storage/
 
 # ========== 日志与临时文件 ==========
 *.log
