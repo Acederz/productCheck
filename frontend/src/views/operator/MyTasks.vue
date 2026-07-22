@@ -56,8 +56,9 @@
         </el-form-item>
       </el-form>
 
-      <div class="table-wrap">
+      <div class="table-wrap" @focusin="onEditableFocusIn" @mousedown.capture="onEditableMouseDown">
         <el-table
+          ref="tableRef"
           :data="tableData"
           v-loading="loading"
           border
@@ -69,10 +70,6 @@
           <el-table-column prop="product_id" label="宝贝ID" width="130" fixed="left" />
           <el-table-column prop="product_name" label="宝贝名称" width="160" fixed="left" show-overflow-tooltip />
           <el-table-column prop="platform" label="平台" width="110" />
-          <el-table-column prop="status" label="状态" width="80" />
-          <el-table-column label="驳回原因" width="120" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.reject_reason || '-' }}</template>
-          </el-table-column>
 
           <!-- 展示字段：主图 / 产品属性 / 宝贝文描图 -->
           <el-table-column label="主图" width="90">
@@ -108,7 +105,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="宝贝文描图" width="170">
+          <el-table-column label="宝贝文描图" width="85">
             <template #default="{ row }">
               <el-button
                 link
@@ -374,6 +371,11 @@
               </template>
             </el-table-column>
 
+          <el-table-column prop="status" label="状态" width="80" />
+          <el-table-column label="驳回原因" width="120" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.reject_reason || '-' }}</template>
+          </el-table-column>
+
           <el-table-column label="操作" width="130" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" size="small" @click="handleSaveRow(row)">保存</el-button>
@@ -454,7 +456,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   createRowCascadeState,
@@ -475,15 +477,83 @@ import { myTasksApi, saveDraftApi, submitTasksApi, updateTaskApi } from '@/api/t
 import { useUserStore } from '@/stores/user'
 
 const loading = ref(false)
+const tableRef = ref(null)
 const tableData = ref([])
 const selectedIds = ref([])
 const page = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 const total = ref(0)
 const rowStates = reactive({})
 const draftFlags = reactive({})
 const draftTimers = {}
 const userStore = useUserStore()
+
+/** 左侧固定列大致宽度：勾选 + 宝贝ID + 宝贝名称 */
+const FIXED_LEFT_WIDTH = 45 + 130 + 160
+/** 点击列后尽量再露出约两列的宽度 */
+const REVEAL_FOLLOWING_WIDTH = 280
+
+/**
+ * 找到表格横向滚动容器（兼容 Element Plus 不同版本 DOM）
+ */
+function getTableScrollWrap() {
+  const root = tableRef.value?.$el
+  if (!root) return null
+  return (
+    root.querySelector('.el-table__body-wrapper .el-scrollbar__wrap')
+    || root.querySelector('.el-scrollbar__wrap')
+    || root.querySelector('.el-table__body-wrapper')
+  )
+}
+
+/**
+ * 点击/聚焦可编辑单元格时，横向滚动，让当前列靠左显示并露出后面几列
+ */
+function scrollToRevealFollowingColumns(evt) {
+  const cell = evt?.target?.closest?.('td.el-table__cell')
+  if (!cell) return
+  const wrap = getTableScrollWrap()
+  if (!wrap) return
+
+  nextTick(() => {
+    const wrapRect = wrap.getBoundingClientRect()
+    const cellRect = cell.getBoundingClientRect()
+    // 目标：当前列左边缘落在「固定列右侧」附近，后面还能看到约两列
+    const targetLeft = wrapRect.left + FIXED_LEFT_WIDTH + 8
+    let delta = cellRect.left - targetLeft
+
+    // 若当前列已在可视区偏左且右侧空间够，不必大动
+    const spaceAfter = wrapRect.right - cellRect.right
+    if (Math.abs(delta) < 12 && spaceAfter >= REVEAL_FOLLOWING_WIDTH) return
+
+    // 右侧空间不足时，略微多滚一点，保证后面几列露出来
+    if (spaceAfter < REVEAL_FOLLOWING_WIDTH) {
+      delta += REVEAL_FOLLOWING_WIDTH - spaceAfter
+    }
+
+    const nextLeft = Math.max(0, wrap.scrollLeft + delta)
+    const maxLeft = Math.max(0, wrap.scrollWidth - wrap.clientWidth)
+    wrap.scrollTo({
+      left: Math.min(nextLeft, maxLeft),
+      behavior: 'smooth',
+    })
+  })
+}
+
+function isEditableControl(target) {
+  return Boolean(target?.closest?.('.el-select, .el-input, .el-textarea'))
+}
+
+function onEditableFocusIn(evt) {
+  if (!isEditableControl(evt.target)) return
+  scrollToRevealFollowingColumns(evt)
+}
+
+function onEditableMouseDown(evt) {
+  // 下拉点击时有时先 mousedown 再 focus，提前滚动体验更好
+  if (!isEditableControl(evt.target)) return
+  scrollToRevealFollowingColumns(evt)
+}
 
 const statusOptions = ['待处理', '已驳回']
 const platformOptions = ['淘宝', '京东', '消费者洞察淘宝', '消费者洞察京东']

@@ -72,7 +72,6 @@
             show-overflow-tooltip
           />
           <el-table-column prop="platform" label="平台" width="110" />
-          <el-table-column prop="status" label="状态" width="80" />
           <el-table-column prop="assignee_name" label="操作员" width="100">
             <template #default="{ row }">{{ row.assignee_name || '-' }}</template>
           </el-table-column>
@@ -110,7 +109,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="宝贝文描图" width="110">
+          <el-table-column label="宝贝文描图" width="85">
             <template #default="{ row }">
               <el-button
                 link
@@ -153,6 +152,7 @@
             <template #default="{ row }">{{ formatMulti(row.total_count) }}</template>
           </el-table-column>
           <el-table-column prop="submitted_at" label="提交时间" width="170" />
+          <el-table-column prop="status" label="状态" width="80" />
 
           <el-table-column label="操作" width="140" fixed="right">
             <template #default="{ row }">
@@ -256,7 +256,7 @@ const rejecting = ref(false)
 const tableData = ref([])
 const selectedIds = ref([])
 const page = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 const total = ref(0)
 
 const platformOptions = ['淘宝', '京东', '消费者洞察淘宝', '消费者洞察京东']

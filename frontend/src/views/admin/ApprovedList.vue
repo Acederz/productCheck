@@ -85,7 +85,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="宝贝文描图" width="110">
+          <el-table-column label="宝贝文描图" width="85">
             <template #default="{ row }">
               <el-button
                 link
@@ -207,7 +207,7 @@ import { downloadApprovedExport } from '@/api/export'
 const loading = ref(false)
 const tableData = ref([])
 const page = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 const total = ref(0)
 const platformOptions = ['淘宝', '京东', '消费者洞察淘宝', '消费者洞察京东']
 const filters = reactive({ platform: [], keyword: '' })

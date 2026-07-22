@@ -53,11 +53,11 @@
         <el-table-column prop="product_id" label="宝贝ID" width="140" />
         <el-table-column prop="product_name" label="宝贝名称" min-width="180" show-overflow-tooltip />
         <el-table-column prop="platform" label="数据平台" width="130" />
-        <el-table-column prop="status" label="状态" width="90" />
         <el-table-column prop="assignee_name" label="操作员" width="100">
           <template #default="{ row }">{{ row.assignee_name || '-' }}</template>
         </el-table-column>
         <el-table-column prop="category_large" label="大类" width="100" />
+        <el-table-column prop="status" label="状态" width="90" />
       </el-table>
 
       <el-pagination
@@ -102,7 +102,7 @@ const assigning = ref(false)
 const tableData = ref([])
 const selectedIds = ref([])
 const page = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 const total = ref(0)
 const showAssignDialog = ref(false)
 const assigneeId = ref(null)
