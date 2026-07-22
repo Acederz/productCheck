@@ -2,7 +2,7 @@
  * 分类字段级联逻辑（操作员行内编辑复用）
  */
 import { reactive } from 'vue'
-import { getFieldMetaApi, getRuleOptionsApi } from '@/api/rules'
+import { getFieldMetaApi, getRuleOptionsApi, getRuleVersionApi } from '@/api/rules'
 
 const CASCADE_ORDER = [
   'category_large',
@@ -45,8 +45,39 @@ export const MULTI_SELECT_FIELDS = [
   'total_count',
 ]
 
-/** 全局大类选项（所有行共用） */
-export const globalLargeOptions = reactive({ list: [] })
+/** 全局大类选项（所有行共用；规则版本变化时自动刷新） */
+export const globalLargeOptions = reactive({ list: [], versionId: null })
+
+/** 前端已知的最新规则版本 id */
+let knownRuleVersionId = null
+
+/**
+ * 同步最新规则版本；版本变化时清空大类缓存。
+ * @returns {Promise<boolean>} 版本是否发生变化
+ */
+export async function syncRuleVersion() {
+  try {
+    const res = await getRuleVersionApi()
+    const versionId = res.data?.id ?? null
+    if (versionId !== knownRuleVersionId) {
+      knownRuleVersionId = versionId
+      globalLargeOptions.list = []
+      globalLargeOptions.versionId = versionId
+      return true
+    }
+    return false
+  } catch (e) {
+    return false
+  }
+}
+
+/** 清空某一行已缓存的下拉选项（强制下次重新请求最新规则） */
+export function clearRowOptionCache(state) {
+  if (!state?.options) return
+  Object.keys(state.options).forEach((key) => {
+    state.options[key] = []
+  })
+}
 
 export function createRowCascadeState() {
   return reactive({
@@ -120,10 +151,13 @@ function buildPath(row) {
   }
 }
 
-export async function loadGlobalLargeOptions() {
-  if (globalLargeOptions.list.length) return
+export async function loadGlobalLargeOptions(force = false) {
+  // 规则版本变了，或强制刷新，或尚未加载时，重新请求大类
+  const versionChanged = await syncRuleVersion()
+  if (!force && !versionChanged && globalLargeOptions.list.length) return
   const res = await getRuleOptionsApi('大类', {})
   globalLargeOptions.list = res.data.options || []
+  globalLargeOptions.versionId = knownRuleVersionId
 }
 
 async function loadRowOptions(fieldKey, row, state) {
@@ -237,13 +271,13 @@ export async function ensureTailOptions(row, state) {
   await loadRowTailMeta(row, state)
 }
 
-/** 下拉展开时懒加载选项 */
+/** 下拉展开时加载选项（始终向服务器要最新规则，避免导入新规则后仍显示旧选项） */
 export async function onDropdownVisible(row, state, fieldKey) {
   if (fieldKey === 'category_large') {
-    await loadGlobalLargeOptions()
+    await loadGlobalLargeOptions(true)
     return
   }
   const key = OPTION_KEY_MAP[fieldKey]
-  if (!key || state.options[key]?.length) return
+  if (!key) return
   await loadRowOptions(fieldKey, row, state)
 }

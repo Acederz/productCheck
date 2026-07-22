@@ -468,6 +468,8 @@ import {
   MULTI_SELECT_FIELDS,
   normalizeRowFields,
   serializeMultiField,
+  syncRuleVersion,
+  clearRowOptionCache,
 } from '@/composables/useClassificationCascade'
 import { myTasksApi, saveDraftApi, submitTasksApi, updateTaskApi } from '@/api/tasks'
 import { useUserStore } from '@/stores/user'
@@ -737,11 +739,16 @@ function handlePageSizeChange() {
 async function loadTasks() {
   loading.value = true
   try {
+    // 规则若已更新，清掉行内旧下拉缓存，避免仍显示上一版选项
+    const versionChanged = await syncRuleVersion()
+    if (versionChanged) {
+      Object.keys(rowStates).forEach((id) => clearRowOptionCache(rowStates[id]))
+    }
     const res = await myTasksApi(buildQueryParams())
     const items = (res.data.items || []).map(normalizeRow)
     tableData.value = items
     total.value = res.data.total || 0
-    await loadGlobalLargeOptions()
+    await loadGlobalLargeOptions(true)
     for (const row of items) {
       await initRowCascade(row, getRowState(row.id))
     }
