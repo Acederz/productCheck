@@ -161,8 +161,18 @@ class ExportService:
         path = self._save_workbook(wb, "approved_export")
         return path, len(items)
 
-    def filter_tasks(self, status=None, platform=None, batch_id=None, keyword=None):
+    def filter_tasks(
+        self,
+        status=None,
+        platform=None,
+        batch_id=None,
+        keyword=None,
+        category_large=None,
+        category_segment=None,
+    ):
         """构建任务导出查询。"""
+        from app.utils.query_filters import apply_category_filters
+
         query = ClassificationTask.query
         if status:
             query = query.filter_by(status=status)
@@ -178,10 +188,16 @@ class ExportService:
                     ClassificationTask.product_name.like(like),
                 )
             )
-        return query
+        return apply_category_filters(
+            query, ClassificationTask, category_large, category_segment
+        )
 
-    def filter_approved(self, platform=None, keyword=None):
+    def filter_approved(
+        self, platform=None, keyword=None, category_large=None, category_segment=None
+    ):
         """构建正式库导出查询。"""
+        from app.utils.query_filters import apply_category_filters
+
         query = ApprovedProduct.query
         if platform:
             platforms = [p.strip() for p in str(platform).split(",") if p.strip()]
@@ -197,4 +213,6 @@ class ExportService:
                     ApprovedProduct.product_name.like(like),
                 )
             )
-        return query
+        return apply_category_filters(
+            query, ApprovedProduct, category_large, category_segment
+        )

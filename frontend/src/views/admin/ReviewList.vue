@@ -23,7 +23,7 @@
         </div>
       </template>
 
-      <!-- 筛选条件：与操作员「我的任务」对齐（平台多选 + 关键词） -->
+      <!-- 筛选：平台 / 大类 / 区隔 / 关键词 -->
       <el-form :inline="true" :model="filters" class="filter-form" @submit.prevent>
         <el-form-item label="平台">
           <el-select
@@ -36,6 +36,45 @@
             style="width: 180px"
           >
             <el-option v-for="p in platformOptions" :key="p" :label="p" :value="p" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="大类">
+          <el-select
+            v-model="categoryFilters.category_large"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            clearable
+            placeholder="全部"
+            style="width: 180px"
+            @change="onCategoryLargeFilterChange"
+          >
+            <el-option
+              v-for="o in categoryLargeOptions"
+              :key="o"
+              :label="o"
+              :value="o"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="区隔">
+          <el-select
+            v-model="categoryFilters.category_segment"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            clearable
+            placeholder="全部"
+            style="width: 180px"
+          >
+            <el-option
+              v-for="o in categorySegmentOptions"
+              :key="o"
+              :label="o"
+              :value="o"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="关键词">
@@ -247,6 +286,20 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { approveReviewsApi, listPendingReviewsApi, rejectReviewsApi } from '@/api/reviews'
+import {
+  resolveFilterValues,
+  useCategoryQueryFilters,
+} from '@/composables/useCategoryQueryFilters'
+
+const {
+  categoryFilters,
+  categoryLargeOptions,
+  categorySegmentOptions,
+  initCategoryFilterOptions,
+  onCategoryLargeFilterChange,
+  categoryQueryParams,
+  resetCategoryFiltersAndOptions,
+} = useCategoryQueryFilters()
 
 const loading = ref(false)
 const rejecting = ref(false)
@@ -283,18 +336,6 @@ const descDragStart = { x: 0, y: 0, panX: 0, panY: 0 }
 const descImageStyle = computed(() => ({
   transform: `translate(${descPanX.value}px, ${descPanY.value}px) scale(${descZoomScale.value})`,
 }))
-
-/** 多选筛选项：未选或全选视为「全部」 */
-function resolveFilterValues(selected, allOptions) {
-  if (!selected?.length) return undefined
-  if (
-    selected.length >= allOptions.length
-    && allOptions.every((item) => selected.includes(item))
-  ) {
-    return undefined
-  }
-  return selected.join(',')
-}
 
 function formatMulti(val) {
   if (val === null || val === undefined || val === '') return '-'
@@ -434,6 +475,7 @@ function buildQueryParams() {
     page_size: pageSize.value,
     platform: resolveFilterValues(filters.platform, platformOptions),
     keyword: filters.keyword?.trim() || undefined,
+    ...categoryQueryParams(),
   }
 }
 
@@ -442,9 +484,10 @@ function handleSearch() {
   loadList()
 }
 
-function handleReset() {
+async function handleReset() {
   filters.platform = []
   filters.keyword = ''
+  await resetCategoryFiltersAndOptions()
   page.value = 1
   loadList()
 }
@@ -514,7 +557,10 @@ async function handleRejectConfirm() {
   }
 }
 
-onMounted(loadList)
+onMounted(async () => {
+  await initCategoryFilterOptions()
+  await loadList()
+})
 onUnmounted(stopDescDrag)
 </script>
 

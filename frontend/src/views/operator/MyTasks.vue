@@ -41,6 +41,45 @@
             <el-option v-for="p in platformOptions" :key="p" :label="p" :value="p" />
           </el-select>
         </el-form-item>
+        <el-form-item label="大类">
+          <el-select
+            v-model="categoryFilters.category_large"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            clearable
+            placeholder="全部"
+            style="width: 180px"
+            @change="onCategoryLargeFilterChange"
+          >
+            <el-option
+              v-for="o in categoryLargeOptions"
+              :key="o"
+              :label="o"
+              :value="o"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="区隔">
+          <el-select
+            v-model="categoryFilters.category_segment"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            clearable
+            placeholder="全部"
+            style="width: 180px"
+          >
+            <el-option
+              v-for="o in categorySegmentOptions"
+              :key="o"
+              :label="o"
+              :value="o"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="关键词">
           <el-input
             v-model="filters.keyword"
@@ -135,9 +174,7 @@
               <template #default="{ row }">
                 <el-select
                   v-model="row.category_large"
-                  multiple
-                  collapse-tags
-                  collapse-tags-tooltip
+                  clearable
                   placeholder="大类"
                   size="small"
                   filterable
@@ -219,151 +256,161 @@
 
             <el-table-column label="辅材质" width="140">
               <template #default="{ row }">
-                <el-select
-                  v-if="getRowState(row.id).meta.materialAux.mode === 'select'"
-                  v-model="row.material_aux"
-                  multiple
-                  collapse-tags
-                  collapse-tags-tooltip
-                  :placeholder="getRowState(row.id).meta.materialAux.hint"
-                  size="small"
-                  filterable
-                  :disabled="row.is_operating === '否'"
-                  @visible-change="(v) => v && onDropdownVisible(row, 'material_aux')"
-                  @change="() => handleCascadeChange(row, 'material_aux')"
-                >
-                  <el-option
-                    v-for="o in getRowState(row.id).options.materialAux"
-                    :key="o"
-                    :label="o"
-                    :value="o"
+                <FieldHintTooltip :hint="getRowState(row.id).meta.materialAux.hint">
+                  <el-select
+                    v-if="getRowState(row.id).meta.materialAux.mode === 'select'"
+                    v-model="row.material_aux"
+                    multiple
+                    collapse-tags
+                    collapse-tags-tooltip
+                    :placeholder="getRowState(row.id).meta.materialAux.hint"
+                    size="small"
+                    filterable
+                    :disabled="row.is_operating === '否'"
+                    @visible-change="(v) => v && onDropdownVisible(row, 'material_aux')"
+                    @change="() => handleCascadeChange(row, 'material_aux')"
+                  >
+                    <el-option
+                      v-for="o in getRowState(row.id).options.materialAux"
+                      :key="o"
+                      :label="o"
+                      :value="o"
+                    />
+                  </el-select>
+                  <el-input
+                    v-else
+                    v-model="row.material_aux"
+                    size="small"
+                    :placeholder="getRowState(row.id).meta.materialAux.hint"
+                    :disabled="row.is_operating === '否'"
+                    @change="() => scheduleDraft(row)"
                   />
-                </el-select>
-                <el-input
-                  v-else
-                  v-model="row.material_aux"
-                  size="small"
-                  :placeholder="getRowState(row.id).meta.materialAux.hint"
-                  :disabled="row.is_operating === '否'"
-                  @change="() => scheduleDraft(row)"
-                />
+                </FieldHintTooltip>
               </template>
             </el-table-column>
 
             <el-table-column label="包装方式" width="140">
               <template #default="{ row }">
-                <el-select
-                  v-if="getRowState(row.id).meta.packaging.mode === 'select'"
-                  v-model="row.packaging"
-                  multiple
-                  collapse-tags
-                  collapse-tags-tooltip
-                  :placeholder="getRowState(row.id).meta.packaging.hint"
-                  size="small"
-                  filterable
-                  :disabled="row.is_operating === '否'"
-                  @visible-change="(v) => v && onDropdownVisible(row, 'packaging')"
-                  @change="() => handleCascadeChange(row, 'packaging')"
-                >
-                  <el-option
-                    v-for="o in getRowState(row.id).options.packaging"
-                    :key="o"
-                    :label="o"
-                    :value="o"
+                <FieldHintTooltip :hint="getRowState(row.id).meta.packaging.hint">
+                  <el-select
+                    v-if="getRowState(row.id).meta.packaging.mode === 'select'"
+                    v-model="row.packaging"
+                    multiple
+                    collapse-tags
+                    collapse-tags-tooltip
+                    :placeholder="getRowState(row.id).meta.packaging.hint"
+                    size="small"
+                    filterable
+                    :disabled="row.is_operating === '否'"
+                    @visible-change="(v) => v && onDropdownVisible(row, 'packaging')"
+                    @change="() => handleCascadeChange(row, 'packaging')"
+                  >
+                    <el-option
+                      v-for="o in getRowState(row.id).options.packaging"
+                      :key="o"
+                      :label="o"
+                      :value="o"
+                    />
+                  </el-select>
+                  <el-input
+                    v-else
+                    v-model="row.packaging"
+                    size="small"
+                    :placeholder="getRowState(row.id).meta.packaging.hint"
+                    :disabled="row.is_operating === '否'"
+                    @change="() => scheduleDraft(row)"
                   />
-                </el-select>
-                <el-input
-                  v-else
-                  v-model="row.packaging"
-                  size="small"
-                  :placeholder="getRowState(row.id).meta.packaging.hint"
-                  :disabled="row.is_operating === '否'"
-                  @change="() => scheduleDraft(row)"
-                />
+                </FieldHintTooltip>
               </template>
             </el-table-column>
 
             <el-table-column label="尺寸" width="150">
               <template #default="{ row }">
-                <el-select
-                  v-if="getRowState(row.id).meta.size.mode === 'select'"
-                  v-model="row.size"
-                  multiple
-                  collapse-tags
-                  collapse-tags-tooltip
-                  :placeholder="getRowState(row.id).meta.size.hint"
-                  size="small"
-                  filterable
-                  :disabled="row.is_operating === '否'"
-                  @visible-change="(v) => v && ensureTailOptions(row, getRowState(row.id))"
-                  @change="() => handleCascadeChange(row, 'size')"
-                >
-                  <el-option v-for="o in getRowState(row.id).options.size" :key="o" :label="o" :value="o" />
-                </el-select>
-                <el-input
-                  v-else
-                  v-model="row.size"
-                  size="small"
-                  :placeholder="getRowState(row.id).meta.size.hint"
-                  :disabled="row.is_operating === '否'"
-                  @change="() => scheduleDraft(row)"
-                />
+                <FieldHintTooltip :hint="getRowState(row.id).meta.size.hint">
+                  <el-select
+                    v-if="getRowState(row.id).meta.size.mode === 'select'"
+                    v-model="row.size"
+                    multiple
+                    collapse-tags
+                    collapse-tags-tooltip
+                    :placeholder="getRowState(row.id).meta.size.hint"
+                    size="small"
+                    filterable
+                    :disabled="row.is_operating === '否'"
+                    @visible-change="(v) => v && ensureTailOptions(row, getRowState(row.id))"
+                    @change="() => handleCascadeChange(row, 'size')"
+                  >
+                    <el-option v-for="o in getRowState(row.id).options.size" :key="o" :label="o" :value="o" />
+                  </el-select>
+                  <el-input
+                    v-else
+                    v-model="row.size"
+                    size="small"
+                    :placeholder="getRowState(row.id).meta.size.hint"
+                    :disabled="row.is_operating === '否'"
+                    @change="() => scheduleDraft(row)"
+                  />
+                </FieldHintTooltip>
               </template>
             </el-table-column>
 
             <el-table-column label="卷数" width="110">
               <template #default="{ row }">
-                <el-select
-                  v-if="getRowState(row.id).meta.roll.mode === 'select'"
-                  v-model="row.roll_count"
-                  multiple
-                  collapse-tags
-                  collapse-tags-tooltip
-                  :placeholder="getRowState(row.id).meta.roll.hint"
-                  size="small"
-                  filterable
-                  :disabled="row.is_operating === '否'"
-                  @visible-change="(v) => v && ensureTailOptions(row, getRowState(row.id))"
-                  @change="() => scheduleDraft(row)"
-                >
-                  <el-option v-for="o in getRowState(row.id).options.roll" :key="o" :label="o" :value="o" />
-                </el-select>
-                <el-input
-                  v-else
-                  v-model="row.roll_count"
-                  size="small"
-                  :placeholder="getRowState(row.id).meta.roll.hint"
-                  :disabled="row.is_operating === '否'"
-                  @change="() => scheduleDraft(row)"
-                />
+                <FieldHintTooltip :hint="getRowState(row.id).meta.roll.hint">
+                  <el-select
+                    v-if="getRowState(row.id).meta.roll.mode === 'select'"
+                    v-model="row.roll_count"
+                    multiple
+                    collapse-tags
+                    collapse-tags-tooltip
+                    :placeholder="getRowState(row.id).meta.roll.hint"
+                    size="small"
+                    filterable
+                    :disabled="row.is_operating === '否'"
+                    @visible-change="(v) => v && ensureTailOptions(row, getRowState(row.id))"
+                    @change="() => scheduleDraft(row)"
+                  >
+                    <el-option v-for="o in getRowState(row.id).options.roll" :key="o" :label="o" :value="o" />
+                  </el-select>
+                  <el-input
+                    v-else
+                    v-model="row.roll_count"
+                    size="small"
+                    :placeholder="getRowState(row.id).meta.roll.hint"
+                    :disabled="row.is_operating === '否'"
+                    @change="() => scheduleDraft(row)"
+                  />
+                </FieldHintTooltip>
               </template>
             </el-table-column>
 
             <el-table-column label="总入数" width="110">
               <template #default="{ row }">
-                <el-select
-                  v-if="getRowState(row.id).meta.total.mode === 'select'"
-                  v-model="row.total_count"
-                  multiple
-                  collapse-tags
-                  collapse-tags-tooltip
-                  :placeholder="getRowState(row.id).meta.total.hint"
-                  size="small"
-                  filterable
-                  :disabled="row.is_operating === '否'"
-                  @visible-change="(v) => v && ensureTailOptions(row, getRowState(row.id))"
-                  @change="() => scheduleDraft(row)"
-                >
-                  <el-option v-for="o in getRowState(row.id).options.total" :key="o" :label="o" :value="o" />
-                </el-select>
-                <el-input
-                  v-else
-                  v-model="row.total_count"
-                  size="small"
-                  :placeholder="getRowState(row.id).meta.total.hint"
-                  :disabled="row.is_operating === '否'"
-                  @change="() => scheduleDraft(row)"
-                />
+                <FieldHintTooltip :hint="getRowState(row.id).meta.total.hint">
+                  <el-select
+                    v-if="getRowState(row.id).meta.total.mode === 'select'"
+                    v-model="row.total_count"
+                    multiple
+                    collapse-tags
+                    collapse-tags-tooltip
+                    :placeholder="getRowState(row.id).meta.total.hint"
+                    size="small"
+                    filterable
+                    :disabled="row.is_operating === '否'"
+                    @visible-change="(v) => v && ensureTailOptions(row, getRowState(row.id))"
+                    @change="() => scheduleDraft(row)"
+                  >
+                    <el-option v-for="o in getRowState(row.id).options.total" :key="o" :label="o" :value="o" />
+                  </el-select>
+                  <el-input
+                    v-else
+                    v-model="row.total_count"
+                    size="small"
+                    :placeholder="getRowState(row.id).meta.total.hint"
+                    :disabled="row.is_operating === '否'"
+                    @change="() => scheduleDraft(row)"
+                  />
+                </FieldHintTooltip>
               </template>
             </el-table-column>
 
@@ -469,8 +516,23 @@ import {
   syncRuleVersion,
   clearRowOptionCache,
 } from '@/composables/useClassificationCascade'
+import {
+  resolveFilterValues,
+  useCategoryQueryFilters,
+} from '@/composables/useCategoryQueryFilters'
+import FieldHintTooltip from '@/components/FieldHintTooltip.vue'
 import { myTasksApi, saveDraftApi, submitTasksApi, updateTaskApi } from '@/api/tasks'
 import { useUserStore } from '@/stores/user'
+
+const {
+  categoryFilters,
+  categoryLargeOptions,
+  categorySegmentOptions,
+  initCategoryFilterOptions,
+  onCategoryLargeFilterChange,
+  categoryQueryParams,
+  resetCategoryFiltersAndOptions,
+} = useCategoryQueryFilters()
 
 const loading = ref(false)
 const tableRef = ref(null)
@@ -558,18 +620,6 @@ const filters = reactive({
   platform: [],
   keyword: '',
 })
-
-/** 多选筛选项：未选或全选视为「全部」，不传查询参数 */
-function resolveFilterValues(selected, allOptions) {
-  if (!selected?.length) return undefined
-  if (
-    selected.length >= allOptions.length
-    && allOptions.every((item) => selected.includes(item))
-  ) {
-    return undefined
-  }
-  return selected.join(',')
-}
 
 const descViewerVisible = ref(false)
 const descViewerImages = ref([])
@@ -729,7 +779,11 @@ function formatProductAttr(val) {
 }
 
 function pickEditable(row) {
-  const data = { is_operating: row.is_operating || '' }
+  const data = {
+    is_operating: row.is_operating || '',
+    // 大类单选，直接存字符串
+    category_large: row.category_large || '',
+  }
   MULTI_SELECT_FIELDS.forEach((field) => {
     data[field] = serializeMultiField(row[field], field)
   })
@@ -781,6 +835,7 @@ function buildQueryParams() {
     status: resolveFilterValues(filters.status, statusOptions),
     platform: resolveFilterValues(filters.platform, platformOptions),
     keyword: filters.keyword?.trim() || undefined,
+    ...categoryQueryParams(),
   }
 }
 
@@ -789,10 +844,11 @@ function handleSearch() {
   loadTasks()
 }
 
-function handleReset() {
+async function handleReset() {
   filters.status = []
   filters.platform = []
   filters.keyword = ''
+  await resetCategoryFiltersAndOptions()
   page.value = 1
   loadTasks()
 }
@@ -850,6 +906,7 @@ async function handleBatchSubmit() {
 }
 
 onMounted(async () => {
+  await initCategoryFilterOptions()
   await loadGlobalLargeOptions()
   await loadTasks()
 })

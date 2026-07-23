@@ -23,7 +23,10 @@ def export_tasks():
         platform=request.args.get("platform"),
         batch_id=request.args.get("batch_id"),
         keyword=request.args.get("keyword", "").strip() or None,
+        category_large=request.args.get("category_large", "").strip() or None,
+        category_segment=request.args.get("category_segment", "").strip() or None,
     )
+
     count = query.count()
     if count == 0:
         return fail("没有可导出的数据")
@@ -53,7 +56,10 @@ def export_approved():
     query = service.filter_approved(
         platform=request.args.get("platform"),
         keyword=request.args.get("keyword", "").strip() or None,
+        category_large=request.args.get("category_large", "").strip() or None,
+        category_segment=request.args.get("category_segment", "").strip() or None,
     )
+
     count = query.count()
     if count == 0:
         return fail("没有可导出的正式数据")

@@ -8,6 +8,7 @@ from app.models.task import ClassificationTask, TaskDraft
 from app.models.user import User
 from app.services.task_service import TaskService
 from app.utils.auth_decorator import admin_required, login_required
+from app.utils.query_filters import apply_category_filters, parse_csv_arg
 from app.utils.response import fail, success
 
 tasks_bp = Blueprint("tasks", __name__)
@@ -16,10 +17,7 @@ task_service = TaskService()
 
 def _parse_csv_arg(name: str) -> list[str]:
     """解析逗号分隔的查询参数。"""
-    raw = request.args.get(name, "").strip()
-    if not raw:
-        return []
-    return [part.strip() for part in raw.split(",") if part.strip()]
+    return parse_csv_arg(request.args.get(name, ""))
 
 
 def _paginate(query):
@@ -56,6 +54,8 @@ def list_tasks():
     platform = request.args.get("platform")
     batch_id = request.args.get("batch_id")
     keyword = request.args.get("keyword", "").strip()
+    category_large = request.args.get("category_large", "")
+    category_segment = request.args.get("category_segment", "")
 
     if status:
         query = query.filter_by(status=status)
@@ -71,6 +71,9 @@ def list_tasks():
                 ClassificationTask.product_name.like(like),
             )
         )
+    query = apply_category_filters(
+        query, ClassificationTask, category_large, category_segment
+    )
     return success(_paginate(query))
 
 
@@ -89,6 +92,8 @@ def my_tasks():
     status_list = _parse_csv_arg("status")
     platform_list = _parse_csv_arg("platform")
     keyword = request.args.get("keyword", "").strip()
+    category_large = request.args.get("category_large", "")
+    category_segment = request.args.get("category_segment", "")
 
     if status_list:
         query = query.filter(ClassificationTask.status.in_(status_list))
@@ -102,6 +107,9 @@ def my_tasks():
                 ClassificationTask.product_name.like(like),
             )
         )
+    query = apply_category_filters(
+        query, ClassificationTask, category_large, category_segment
+    )
     result = _paginate(query)
 
     # 合并暂存草稿到列表数据

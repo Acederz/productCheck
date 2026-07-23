@@ -86,11 +86,25 @@ class TaskService:
             return ",".join(cleaned) if cleaned else None
         return value
 
+    def _normalize_category_large(self, value):
+        """大类为单选：列表或逗号串只保留第一个有效值。"""
+        if value is None:
+            return None
+        if isinstance(value, list):
+            cleaned = [str(v).strip() for v in value if str(v).strip()]
+            return cleaned[0] if cleaned else None
+        text = str(value).strip()
+        if not text:
+            return None
+        if "，" in text or "," in text:
+            parts = [p.strip() for p in text.replace("，", ",").split(",") if p.strip()]
+            return parts[0] if parts else None
+        return text
+
     def _apply_editable_fields(self, task: ClassificationTask, data: dict) -> list:
         """应用可编辑字段，返回变更列表 [(field, old, new)]。"""
         changes = []
         multi_fields = {
-            "category_large",
             "category_segment",
             "category_type",
             "material_main",
@@ -105,7 +119,9 @@ class TaskService:
                 continue
             old = getattr(task, field)
             new = data[field]
-            if field in multi_fields:
+            if field == "category_large":
+                new = self._normalize_category_large(new)
+            elif field in multi_fields:
                 new = self._normalize_multi_value(field, new)
             if old != new:
                 changes.append((field, old, new))

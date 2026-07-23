@@ -6,6 +6,7 @@ from app.extensions import db
 from app.models.approved import ApprovedProduct
 from app.models.user import User
 from app.utils.auth_decorator import admin_required
+from app.utils.query_filters import apply_category_filters, parse_csv_arg
 from app.utils.response import success
 
 approved_bp = Blueprint("approved", __name__)
@@ -13,10 +14,7 @@ approved_bp = Blueprint("approved", __name__)
 
 def _parse_csv_arg(name: str) -> list[str]:
     """解析逗号分隔的查询参数。"""
-    raw = request.args.get(name, "").strip()
-    if not raw:
-        return []
-    return [part.strip() for part in raw.split(",") if part.strip()]
+    return parse_csv_arg(request.args.get(name, ""))
 
 
 def _approved_to_dict(item: ApprovedProduct, users: dict) -> dict:
@@ -60,6 +58,8 @@ def list_approved():
     page_size = min(max(int(request.args.get("page_size", 20)), 1), 200)
     platform_list = _parse_csv_arg("platform")
     keyword = request.args.get("keyword", "").strip()
+    category_large = request.args.get("category_large", "")
+    category_segment = request.args.get("category_segment", "")
 
     query = ApprovedProduct.query
     if platform_list:
@@ -72,6 +72,9 @@ def list_approved():
                 ApprovedProduct.product_name.like(like),
             )
         )
+    query = apply_category_filters(
+        query, ApprovedProduct, category_large, category_segment
+    )
 
     total = query.count()
     items = (

@@ -32,9 +32,8 @@ const OPTION_KEY_MAP = {
   packaging: 'packaging',
 }
 
-/** 所有分类下拉字段（除「是否经营」外）均支持多选 */
+/** 填写时可多选的分类字段（大类为单选，不在此列） */
 export const MULTI_SELECT_FIELDS = [
-  'category_large',
   'category_segment',
   'category_type',
   'material_main',
@@ -44,6 +43,21 @@ export const MULTI_SELECT_FIELDS = [
   'roll_count',
   'total_count',
 ]
+
+/**
+ * 大类单选值规范化（兼容历史逗号多选 / 数组，编辑时只保留第一个）
+ */
+export function normalizeSingleLarge(value) {
+  if (Array.isArray(value)) {
+    const first = value.map((v) => String(v).trim()).find(Boolean)
+    return first || ''
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parts = value.split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+    return parts[0] || ''
+  }
+  return value ? String(value).trim() : ''
+}
 
 /** 全局大类选项（所有行共用；规则版本变化时自动刷新） */
 export const globalLargeOptions = reactive({ list: [], versionId: null })
@@ -123,8 +137,11 @@ export function serializeMultiField(value, field) {
   return normalizeMultiField(value, field).join(',')
 }
 
-/** 规范化一行中所有多选字段 */
+/** 规范化一行中所有分类字段（大类单选，其余多选） */
 export function normalizeRowFields(row) {
+  if ('category_large' in row) {
+    row.category_large = normalizeSingleLarge(row.category_large)
+  }
   MULTI_SELECT_FIELDS.forEach((field) => {
     if (field in row) {
       row[field] = normalizeMultiField(row[field], field)
@@ -135,6 +152,10 @@ export function normalizeRowFields(row) {
 
 /** 将已选值规范为路径数组（多选全部传给后端，取下级并集） */
 function pathValues(value, field) {
+  if (field === 'category_large') {
+    const single = normalizeSingleLarge(value)
+    return single ? [single] : undefined
+  }
   const list = normalizeMultiField(value, field)
   return list.length ? list : undefined
 }
@@ -260,6 +281,7 @@ export async function onRowCascadeChange(row, state, fieldKey) {
 /** 是否经营变更 */
 export async function onRowOperatingChange(row, state) {
   if (row.is_operating === '否') {
+    row.category_large = ''
     MULTI_SELECT_FIELDS.forEach((k) => {
       row[k] = []
     })

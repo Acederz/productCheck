@@ -8,6 +8,7 @@ from app.models.task import ClassificationTask
 from app.models.user import User
 from app.services.review_service import ReviewService
 from app.utils.auth_decorator import admin_required
+from app.utils.query_filters import apply_category_filters, parse_csv_arg
 from app.utils.response import fail, success
 
 reviews_bp = Blueprint("reviews", __name__)
@@ -16,10 +17,7 @@ review_service = ReviewService()
 
 def _parse_csv_arg(name: str) -> list[str]:
     """解析逗号分隔的查询参数。"""
-    raw = request.args.get(name, "").strip()
-    if not raw:
-        return []
-    return [part.strip() for part in raw.split(",") if part.strip()]
+    return parse_csv_arg(request.args.get(name, ""))
 
 
 def _paginate_review_list():
@@ -32,6 +30,8 @@ def _paginate_review_list():
     platform_list = _parse_csv_arg("platform")
     keyword = request.args.get("keyword", "").strip()
     assignee_id = request.args.get("assignee_id", "").strip()
+    category_large = request.args.get("category_large", "")
+    category_segment = request.args.get("category_segment", "")
 
     if platform_list:
         query = query.filter(ClassificationTask.platform.in_(platform_list))
@@ -45,6 +45,9 @@ def _paginate_review_list():
         )
     if assignee_id.isdigit():
         query = query.filter_by(assignee_id=int(assignee_id))
+    query = apply_category_filters(
+        query, ClassificationTask, category_large, category_segment
+    )
 
     total = query.count()
     items = (
