@@ -65,103 +65,113 @@
       <el-form-item label="辅材质">
         <FieldHintTooltip :hint="meta.materialAux.hint">
           <el-select
-            v-if="meta.materialAux.mode === 'select'"
             v-model="form.material_aux"
             multiple
             collapse-tags
             collapse-tags-tooltip
-            :placeholder="meta.materialAux.hint"
             filterable
+            allow-create
+            default-first-option
+            :placeholder="hintOrTypePlaceholder(meta.materialAux.hint)"
             @change="() => onCascadeChange('material_aux')"
           >
-            <el-option v-for="o in options.materialAux" :key="o" :label="o" :value="o" />
+            <el-option
+              v-for="o in mergeSelectOptions(options.materialAux, form.material_aux, 'material_aux')"
+              :key="o"
+              :label="o"
+              :value="o"
+            />
           </el-select>
-          <el-input
-            v-else
-            v-model="form.material_aux"
-            :placeholder="meta.materialAux.hint"
-            @change="() => onCascadeChange('material_aux')"
-          />
         </FieldHintTooltip>
       </el-form-item>
 
       <el-form-item label="包装方式">
         <FieldHintTooltip :hint="meta.packaging.hint">
           <el-select
-            v-if="meta.packaging.mode === 'select'"
             v-model="form.packaging"
             multiple
             collapse-tags
             collapse-tags-tooltip
-            :placeholder="meta.packaging.hint"
             filterable
+            allow-create
+            default-first-option
+            :placeholder="hintOrTypePlaceholder(meta.packaging.hint)"
             @change="() => onCascadeChange('packaging')"
           >
-            <el-option v-for="o in options.packaging" :key="o" :label="o" :value="o" />
+            <el-option
+              v-for="o in mergeSelectOptions(options.packaging, form.packaging, 'packaging')"
+              :key="o"
+              :label="o"
+              :value="o"
+            />
           </el-select>
-          <el-input
-            v-else
-            v-model="form.packaging"
-            :placeholder="meta.packaging.hint"
-            @change="() => onCascadeChange('packaging')"
-          />
         </FieldHintTooltip>
       </el-form-item>
 
       <el-form-item label="尺寸">
         <FieldHintTooltip :hint="meta.size.hint">
           <el-select
-            v-if="meta.size.mode === 'select'"
             v-model="form.size"
             multiple
             collapse-tags
             collapse-tags-tooltip
-            :placeholder="meta.size.hint"
             filterable
+            allow-create
+            default-first-option
+            :placeholder="hintOrTypePlaceholder(meta.size.hint)"
             @change="() => onCascadeChange('size')"
           >
-            <el-option v-for="o in options.size" :key="o" :label="o" :value="o" />
+            <el-option
+              v-for="o in mergeSelectOptions(options.size, form.size, 'size')"
+              :key="o"
+              :label="o"
+              :value="o"
+            />
           </el-select>
-          <el-input
-            v-else
-            v-model="form.size"
-            :placeholder="meta.size.hint"
-            @change="() => onCascadeChange('size')"
-          />
         </FieldHintTooltip>
       </el-form-item>
 
       <el-form-item label="卷数">
         <FieldHintTooltip :hint="meta.roll.hint">
           <el-select
-            v-if="meta.roll.mode === 'select'"
             v-model="form.roll_count"
             multiple
             collapse-tags
             collapse-tags-tooltip
-            :placeholder="meta.roll.hint"
             filterable
+            allow-create
+            default-first-option
+            :placeholder="hintOrTypePlaceholder(meta.roll.hint)"
           >
-            <el-option v-for="o in options.roll" :key="o" :label="o" :value="o" />
+            <el-option
+              v-for="o in mergeSelectOptions(options.roll, form.roll_count, 'roll_count')"
+              :key="o"
+              :label="o"
+              :value="o"
+            />
           </el-select>
-          <el-input v-else v-model="form.roll_count" :placeholder="meta.roll.hint" />
         </FieldHintTooltip>
       </el-form-item>
 
       <el-form-item label="总入数">
         <FieldHintTooltip :hint="meta.total.hint">
           <el-select
-            v-if="meta.total.mode === 'select'"
             v-model="form.total_count"
             multiple
             collapse-tags
             collapse-tags-tooltip
-            :placeholder="meta.total.hint"
             filterable
+            allow-create
+            default-first-option
+            :placeholder="hintOrTypePlaceholder(meta.total.hint)"
           >
-            <el-option v-for="o in options.total" :key="o" :label="o" :value="o" />
+            <el-option
+              v-for="o in mergeSelectOptions(options.total, form.total_count, 'total_count')"
+              :key="o"
+              :label="o"
+              :value="o"
+            />
           </el-select>
-          <el-input v-else v-model="form.total_count" :placeholder="meta.total.hint" />
         </FieldHintTooltip>
       </el-form-item>
     </template>
@@ -176,6 +186,8 @@ import {
   normalizeMultiField,
   normalizeRowFields,
   normalizeSingleLarge,
+  mergeSelectOptions,
+  hintOrTypePlaceholder,
 } from '@/composables/useClassificationCascade'
 import FieldHintTooltip from '@/components/FieldHintTooltip.vue'
 
@@ -271,18 +283,14 @@ async function loadOptions(fieldKey) {
   const key = optionKeyMap[fieldKey]
   options[key] = res.data.options || []
   if (fieldKey === 'material_aux') {
-    meta.materialAux.mode = res.data.input_mode === 'text' ? 'text' : 'select'
+    meta.materialAux.mode = 'select'
     meta.materialAux.hint = res.data.hint || ''
-    if (meta.materialAux.mode === 'select') {
-      form.material_aux = normalizeMultiField(form.material_aux, 'material_aux')
-    }
+    form.material_aux = normalizeMultiField(form.material_aux, 'material_aux')
   }
   if (fieldKey === 'packaging') {
-    meta.packaging.mode = res.data.input_mode === 'text' ? 'text' : 'select'
+    meta.packaging.mode = 'select'
     meta.packaging.hint = res.data.hint || ''
-    if (meta.packaging.mode === 'select') {
-      form.packaging = normalizeMultiField(form.packaging, 'packaging')
-    }
+    form.packaging = normalizeMultiField(form.packaging, 'packaging')
   }
 }
 
@@ -290,15 +298,13 @@ const tailFieldMap = { size: 'size', roll: 'roll_count', total: 'total_count' }
 
 async function loadFieldMeta(fieldName, targetKey, optionKey) {
   const res = await getFieldMetaApi(fieldName, buildPath())
-  meta[targetKey].mode = res.data.input_mode === 'select' ? 'select' : 'text'
+  meta[targetKey].mode = 'select'
   meta[targetKey].hint = res.data.hint || ''
   const rowField = tailFieldMap[targetKey]
-  if (rowField && res.data.input_mode === 'select') {
+  if (rowField) {
     form[rowField] = normalizeMultiField(form[rowField], rowField)
   }
-  if (res.data.input_mode === 'select') {
-    options[optionKey] = res.data.options || []
-  }
+  options[optionKey] = res.data.options || []
 }
 
 async function loadTailMeta() {

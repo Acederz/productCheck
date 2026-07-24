@@ -1,5 +1,9 @@
 /**
  * 分类字段级联逻辑（操作员行内编辑复用）
+ *
+ * 加载策略（A+D）：
+ * - A 懒加载：展开下拉时再请求该字段选项
+ * - D 缓存：相同规则版本 + 字段 + 路径 复用结果
  */
 import { reactive } from 'vue'
 import { getFieldMetaApi, getRuleOptionsApi, getRuleVersionApi } from '@/api/rules'
@@ -30,6 +34,26 @@ const OPTION_KEY_MAP = {
   material_main: 'materialMain',
   material_aux: 'materialAux',
   packaging: 'packaging',
+  size: 'size',
+  roll_count: 'roll',
+  total_count: 'total',
+}
+
+/** 尺寸/卷数/总入数：走 field-meta 接口 */
+const TAIL_META_MAP = {
+  size: { fieldName: '尺寸', targetKey: 'size', optionKey: 'size', rowField: 'size' },
+  roll_count: { fieldName: '卷数', targetKey: 'roll', optionKey: 'roll', rowField: 'roll_count' },
+  total_count: { fieldName: '总入数', targetKey: 'total', optionKey: 'total', rowField: 'total_count' },
+}
+
+const DOWNSTREAM_CLEARS = {
+  category_large: ['category_segment', 'category_type', 'material_main', 'material_aux', 'packaging', 'size', 'roll_count', 'total_count'],
+  category_segment: ['category_type', 'material_main', 'material_aux', 'packaging', 'size', 'roll_count', 'total_count'],
+  category_type: ['material_main', 'material_aux', 'packaging', 'size', 'roll_count', 'total_count'],
+  material_main: ['material_aux', 'packaging', 'size', 'roll_count', 'total_count'],
+  material_aux: ['packaging', 'size', 'roll_count', 'total_count'],
+  packaging: ['size', 'roll_count', 'total_count'],
+  size: ['roll_count', 'total_count'],
 }
 
 /** 填写时可多选的分类字段（大类为单选，不在此列） */
@@ -66,7 +90,43 @@ export const globalLargeOptions = reactive({ list: [], versionId: null })
 let knownRuleVersionId = null
 
 /**
- * 同步最新规则版本；版本变化时清空大类缓存。
+ * 规则选项/元数据缓存。
+ * key = versionId|kind|field|stablePathJson
+ */
+const pathResultCache = new Map()
+
+/** 进行中的相同请求，避免并发重复打接口 */
+const inflightRequests = new Map()
+
+function stablePathJson(path) {
+  if (!path || typeof path !== 'object') return '{}'
+  const keys = Object.keys(path).sort()
+  const normalized = {}
+  keys.forEach((k) => {
+    const val = path[k]
+    if (val === undefined || val === null || val === '') return
+    if (Array.isArray(val)) {
+      const list = val.map((v) => String(v)).filter(Boolean).sort()
+      if (list.length) normalized[k] = list
+    } else {
+      normalized[k] = val
+    }
+  })
+  return JSON.stringify(normalized)
+}
+
+function cacheKey(kind, field, path) {
+  return `${knownRuleVersionId ?? '0'}|${kind}|${field}|${stablePathJson(path)}`
+}
+
+/** 清空 path 级缓存（规则版本变化时调用） */
+export function clearPathOptionsCache() {
+  pathResultCache.clear()
+  inflightRequests.clear()
+}
+
+/**
+ * 同步最新规则版本；版本变化时清空大类与 path 缓存。
  * @returns {Promise<boolean>} 版本是否发生变化
  */
 export async function syncRuleVersion() {
@@ -77,6 +137,7 @@ export async function syncRuleVersion() {
       knownRuleVersionId = versionId
       globalLargeOptions.list = []
       globalLargeOptions.versionId = versionId
+      clearPathOptionsCache()
       return true
     }
     return false
@@ -85,7 +146,55 @@ export async function syncRuleVersion() {
   }
 }
 
-/** 清空某一行已缓存的下拉选项（强制下次重新请求最新规则） */
+/**
+ * 带缓存的规则 options 请求（筛选项与行内下拉共用）。
+ */
+export async function getCachedRuleOptions(field, path = {}) {
+  const key = cacheKey('options', field, path)
+  if (pathResultCache.has(key)) {
+    return pathResultCache.get(key)
+  }
+  if (inflightRequests.has(key)) {
+    return inflightRequests.get(key)
+  }
+  const pending = getRuleOptionsApi(field, path)
+    .then((res) => {
+      const data = res.data || { options: [], hint: '', input_mode: 'select' }
+      pathResultCache.set(key, data)
+      return data
+    })
+    .finally(() => {
+      inflightRequests.delete(key)
+    })
+  inflightRequests.set(key, pending)
+  return pending
+}
+
+/**
+ * 带缓存的 field-meta 请求。
+ */
+export async function getCachedFieldMeta(field, path = {}) {
+  const key = cacheKey('meta', field, path)
+  if (pathResultCache.has(key)) {
+    return pathResultCache.get(key)
+  }
+  if (inflightRequests.has(key)) {
+    return inflightRequests.get(key)
+  }
+  const pending = getFieldMetaApi(field, path)
+    .then((res) => {
+      const data = res.data || { options: [], hint: '', input_mode: 'select' }
+      pathResultCache.set(key, data)
+      return data
+    })
+    .finally(() => {
+      inflightRequests.delete(key)
+    })
+  inflightRequests.set(key, pending)
+  return pending
+}
+
+/** 清空某一行已缓存的下拉选项（界面侧；path 缓存仍可复用） */
 export function clearRowOptionCache(state) {
   if (!state?.options) return
   Object.keys(state.options).forEach((key) => {
@@ -109,8 +218,8 @@ export function createRowCascadeState() {
       materialAux: { mode: 'select', hint: '' },
       packaging: { mode: 'select', hint: '' },
       size: { mode: 'select', hint: '' },
-      roll: { mode: 'text', hint: '' },
-      total: { mode: 'text', hint: '' },
+      roll: { mode: 'select', hint: '' },
+      total: { mode: 'select', hint: '' },
     },
   })
 }
@@ -135,6 +244,27 @@ export function serializeMultiField(value, field) {
     return normalizeMultiField(value, field)
   }
   return normalizeMultiField(value, field).join(',')
+}
+
+/**
+ * 合并规则选项与已选手输值，避免 allow-create 的自定义值丢失展示。
+ */
+export function mergeSelectOptions(options, value, field) {
+  const base = Array.isArray(options) ? [...options] : []
+  const seen = new Set(base)
+  normalizeMultiField(value, field).forEach((item) => {
+    if (item && !seen.has(item)) {
+      seen.add(item)
+      base.push(item)
+    }
+  })
+  return base
+}
+
+/** 占位：有规则提示用提示，否则提示可选手输 */
+export function hintOrTypePlaceholder(hint) {
+  const text = String(hint || '').trim()
+  return text || '可选，无则输入后回车'
 }
 
 /** 规范化一行中所有分类字段（大类单选，其余多选） */
@@ -174,72 +304,43 @@ function buildPath(row) {
 }
 
 export async function loadGlobalLargeOptions(force = false) {
-  // 规则版本变了，或强制刷新，或尚未加载时，重新请求大类
   const versionChanged = await syncRuleVersion()
   if (!force && !versionChanged && globalLargeOptions.list.length) return
-  const res = await getRuleOptionsApi('大类', {})
-  globalLargeOptions.list = res.data.options || []
+  const data = await getCachedRuleOptions('大类', {})
+  globalLargeOptions.list = data.options || []
   globalLargeOptions.versionId = knownRuleVersionId
 }
 
 async function loadRowOptions(fieldKey, row, state) {
   const apiField = FIELD_API_MAP[fieldKey]
   if (!apiField) return
-  const res = await getRuleOptionsApi(apiField, buildPath(row))
+  const data = await getCachedRuleOptions(apiField, buildPath(row))
   const key = OPTION_KEY_MAP[fieldKey]
-  state.options[key] = res.data.options || []
+  state.options[key] = data.options || []
   if (fieldKey === 'material_aux') {
-    state.meta.materialAux.mode = res.data.input_mode === 'text' ? 'text' : 'select'
-    state.meta.materialAux.hint = res.data.hint || ''
-    if (state.meta.materialAux.mode === 'select') {
-      row.material_aux = normalizeMultiField(row.material_aux, 'material_aux')
-    }
+    state.meta.materialAux.mode = 'select'
+    state.meta.materialAux.hint = data.hint || ''
+    row.material_aux = normalizeMultiField(row.material_aux, 'material_aux')
   }
   if (fieldKey === 'packaging') {
-    state.meta.packaging.mode = res.data.input_mode === 'text' ? 'text' : 'select'
-    state.meta.packaging.hint = res.data.hint || ''
-    if (state.meta.packaging.mode === 'select') {
-      row.packaging = normalizeMultiField(row.packaging, 'packaging')
-    }
+    state.meta.packaging.mode = 'select'
+    state.meta.packaging.hint = data.hint || ''
+    row.packaging = normalizeMultiField(row.packaging, 'packaging')
   }
 }
 
-const TAIL_FIELD_MAP = {
-  size: 'size',
-  roll: 'roll_count',
-  total: 'total_count',
-}
-
-async function loadRowFieldMeta(fieldName, targetKey, optionKey, row, state) {
-  const res = await getFieldMetaApi(fieldName, buildPath(row))
-  state.meta[targetKey].mode = res.data.input_mode === 'select' ? 'select' : 'text'
-  state.meta[targetKey].hint = res.data.hint || ''
-  const rowField = TAIL_FIELD_MAP[targetKey]
-  if (rowField && res.data.input_mode === 'select') {
-    row[rowField] = normalizeMultiField(row[rowField], rowField)
-  }
-  if (res.data.input_mode === 'select') {
-    state.options[optionKey] = res.data.options || []
-  }
-}
-
-async function loadRowTailMeta(row, state) {
-  await loadRowFieldMeta('尺寸', 'size', 'size', row, state)
-  await loadRowFieldMeta('卷数', 'roll', 'roll', row, state)
-  await loadRowFieldMeta('总入数', 'total', 'total', row, state)
+async function loadRowTailField(fieldKey, row, state) {
+  const cfg = TAIL_META_MAP[fieldKey]
+  if (!cfg) return
+  const data = await getCachedFieldMeta(cfg.fieldName, buildPath(row))
+  state.meta[cfg.targetKey].mode = 'select'
+  state.meta[cfg.targetKey].hint = data.hint || ''
+  row[cfg.rowField] = normalizeMultiField(row[cfg.rowField], cfg.rowField)
+  state.options[cfg.optionKey] = data.options || []
 }
 
 function clearDownstream(row, fromField) {
-  const clears = {
-    category_large: ['category_segment', 'category_type', 'material_main', 'material_aux', 'packaging', 'size', 'roll_count', 'total_count'],
-    category_segment: ['category_type', 'material_main', 'material_aux', 'packaging', 'size', 'roll_count', 'total_count'],
-    category_type: ['material_main', 'material_aux', 'packaging', 'size', 'roll_count', 'total_count'],
-    material_main: ['material_aux', 'packaging', 'size', 'roll_count', 'total_count'],
-    material_aux: ['packaging', 'size', 'roll_count', 'total_count'],
-    packaging: ['size', 'roll_count', 'total_count'],
-    size: ['roll_count', 'total_count'],
-  }
-  ;(clears[fromField] || []).forEach((k) => {
+  ;(DOWNSTREAM_CLEARS[fromField] || []).forEach((k) => {
     if (MULTI_SELECT_FIELDS.includes(k)) {
       row[k] = []
       return
@@ -248,34 +349,28 @@ function clearDownstream(row, fromField) {
   })
 }
 
-function hasFieldValue(row, fieldKey) {
-  if (MULTI_SELECT_FIELDS.includes(fieldKey)) {
-    return normalizeMultiField(row[fieldKey], fieldKey).length > 0
-  }
-  return Boolean(row[fieldKey])
+/** 清空行内下游字段的界面选项（避免改上级后仍显示旧选项） */
+function clearRowDownstreamOptions(state, fromField) {
+  if (!state?.options) return
+  ;(DOWNSTREAM_CLEARS[fromField] || []).forEach((fieldKey) => {
+    const optKey = OPTION_KEY_MAP[fieldKey]
+    if (optKey) state.options[optKey] = []
+  })
 }
 
-/** 初始化某一行的级联选项（已有值时恢复下拉列表） */
-export async function initRowCascade(row, state) {
+/**
+ * 初始化行：仅规范化字段值，不预拉选项（懒加载）。
+ */
+export async function initRowCascade(row, _state) {
   normalizeRowFields(row)
-  if (!hasFieldValue(row, 'category_large')) return
-  for (const key of CASCADE_ORDER.slice(1)) {
-    if (hasFieldValue(row, key) || key === 'category_segment') {
-      await loadRowOptions(key, row, state)
-    }
-  }
-  await loadRowTailMeta(row, state)
 }
 
-/** 某字段变更后刷新下游选项 */
+/**
+ * 某字段变更后：清空下游值与行内选项，不预拉（下次展开再请求）。
+ */
 export async function onRowCascadeChange(row, state, fieldKey) {
   clearDownstream(row, fieldKey)
-  const idx = CASCADE_ORDER.indexOf(fieldKey)
-  const toLoad = CASCADE_ORDER.slice(idx + 1)
-  for (const key of toLoad) {
-    if (FIELD_API_MAP[key]) await loadRowOptions(key, row, state)
-  }
-  await loadRowTailMeta(row, state)
+  clearRowDownstreamOptions(state, fieldKey)
 }
 
 /** 是否经营变更 */
@@ -285,22 +380,35 @@ export async function onRowOperatingChange(row, state) {
     MULTI_SELECT_FIELDS.forEach((k) => {
       row[k] = []
     })
+    clearRowOptionCache(state)
   } else {
     await initRowCascade(row, state)
   }
 }
 
-export async function ensureTailOptions(row, state) {
-  await loadRowTailMeta(row, state)
-}
-
-/** 下拉展开时加载选项（始终向服务器要最新规则，避免导入新规则后仍显示旧选项） */
-export async function onDropdownVisible(row, state, fieldKey) {
-  if (fieldKey === 'category_large') {
-    await loadGlobalLargeOptions(true)
+/**
+ * 兼容旧调用：按需加载单个尾部字段；未指定则加载尺寸。
+ */
+export async function ensureTailOptions(row, state, fieldKey = 'size') {
+  if (TAIL_META_MAP[fieldKey]) {
+    await loadRowTailField(fieldKey, row, state)
     return
   }
-  const key = OPTION_KEY_MAP[fieldKey]
-  if (!key) return
+  await loadRowTailField('size', row, state)
+}
+
+/**
+ * 下拉展开时加载该字段选项（优先走缓存）。
+ */
+export async function onDropdownVisible(row, state, fieldKey) {
+  if (fieldKey === 'category_large') {
+    await loadGlobalLargeOptions(false)
+    return
+  }
+  if (TAIL_META_MAP[fieldKey]) {
+    await loadRowTailField(fieldKey, row, state)
+    return
+  }
+  if (!OPTION_KEY_MAP[fieldKey] || !FIELD_API_MAP[fieldKey]) return
   await loadRowOptions(fieldKey, row, state)
 }

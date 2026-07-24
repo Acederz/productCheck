@@ -258,33 +258,26 @@
               <template #default="{ row }">
                 <FieldHintTooltip :hint="getRowState(row.id).meta.materialAux.hint">
                   <el-select
-                    v-if="getRowState(row.id).meta.materialAux.mode === 'select'"
                     v-model="row.material_aux"
                     multiple
                     collapse-tags
                     collapse-tags-tooltip
-                    :placeholder="getRowState(row.id).meta.materialAux.hint"
-                    size="small"
                     filterable
+                    allow-create
+                    default-first-option
+                    :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.materialAux.hint)"
+                    size="small"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'material_aux')"
                     @change="() => handleCascadeChange(row, 'material_aux')"
                   >
                     <el-option
-                      v-for="o in getRowState(row.id).options.materialAux"
+                      v-for="o in mergeSelectOptions(getRowState(row.id).options.materialAux, row.material_aux, 'material_aux')"
                       :key="o"
                       :label="o"
                       :value="o"
                     />
                   </el-select>
-                  <el-input
-                    v-else
-                    v-model="row.material_aux"
-                    size="small"
-                    :placeholder="getRowState(row.id).meta.materialAux.hint"
-                    :disabled="row.is_operating === '否'"
-                    @change="() => scheduleDraft(row)"
-                  />
                 </FieldHintTooltip>
               </template>
             </el-table-column>
@@ -293,33 +286,26 @@
               <template #default="{ row }">
                 <FieldHintTooltip :hint="getRowState(row.id).meta.packaging.hint">
                   <el-select
-                    v-if="getRowState(row.id).meta.packaging.mode === 'select'"
                     v-model="row.packaging"
                     multiple
                     collapse-tags
                     collapse-tags-tooltip
-                    :placeholder="getRowState(row.id).meta.packaging.hint"
-                    size="small"
                     filterable
+                    allow-create
+                    default-first-option
+                    :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.packaging.hint)"
+                    size="small"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'packaging')"
                     @change="() => handleCascadeChange(row, 'packaging')"
                   >
                     <el-option
-                      v-for="o in getRowState(row.id).options.packaging"
+                      v-for="o in mergeSelectOptions(getRowState(row.id).options.packaging, row.packaging, 'packaging')"
                       :key="o"
                       :label="o"
                       :value="o"
                     />
                   </el-select>
-                  <el-input
-                    v-else
-                    v-model="row.packaging"
-                    size="small"
-                    :placeholder="getRowState(row.id).meta.packaging.hint"
-                    :disabled="row.is_operating === '否'"
-                    @change="() => scheduleDraft(row)"
-                  />
                 </FieldHintTooltip>
               </template>
             </el-table-column>
@@ -328,28 +314,26 @@
               <template #default="{ row }">
                 <FieldHintTooltip :hint="getRowState(row.id).meta.size.hint">
                   <el-select
-                    v-if="getRowState(row.id).meta.size.mode === 'select'"
                     v-model="row.size"
                     multiple
                     collapse-tags
                     collapse-tags-tooltip
-                    :placeholder="getRowState(row.id).meta.size.hint"
-                    size="small"
                     filterable
+                    allow-create
+                    default-first-option
+                    :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.size.hint)"
+                    size="small"
                     :disabled="row.is_operating === '否'"
-                    @visible-change="(v) => v && ensureTailOptions(row, getRowState(row.id))"
+                    @visible-change="(v) => v && onDropdownVisible(row, 'size')"
                     @change="() => handleCascadeChange(row, 'size')"
                   >
-                    <el-option v-for="o in getRowState(row.id).options.size" :key="o" :label="o" :value="o" />
+                    <el-option
+                      v-for="o in mergeSelectOptions(getRowState(row.id).options.size, row.size, 'size')"
+                      :key="o"
+                      :label="o"
+                      :value="o"
+                    />
                   </el-select>
-                  <el-input
-                    v-else
-                    v-model="row.size"
-                    size="small"
-                    :placeholder="getRowState(row.id).meta.size.hint"
-                    :disabled="row.is_operating === '否'"
-                    @change="() => scheduleDraft(row)"
-                  />
                 </FieldHintTooltip>
               </template>
             </el-table-column>
@@ -358,28 +342,26 @@
               <template #default="{ row }">
                 <FieldHintTooltip :hint="getRowState(row.id).meta.roll.hint">
                   <el-select
-                    v-if="getRowState(row.id).meta.roll.mode === 'select'"
                     v-model="row.roll_count"
                     multiple
                     collapse-tags
                     collapse-tags-tooltip
-                    :placeholder="getRowState(row.id).meta.roll.hint"
-                    size="small"
                     filterable
+                    allow-create
+                    default-first-option
+                    :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.roll.hint)"
+                    size="small"
                     :disabled="row.is_operating === '否'"
-                    @visible-change="(v) => v && ensureTailOptions(row, getRowState(row.id))"
+                    @visible-change="(v) => v && onDropdownVisible(row, 'roll_count')"
                     @change="() => scheduleDraft(row)"
                   >
-                    <el-option v-for="o in getRowState(row.id).options.roll" :key="o" :label="o" :value="o" />
+                    <el-option
+                      v-for="o in mergeSelectOptions(getRowState(row.id).options.roll, row.roll_count, 'roll_count')"
+                      :key="o"
+                      :label="o"
+                      :value="o"
+                    />
                   </el-select>
-                  <el-input
-                    v-else
-                    v-model="row.roll_count"
-                    size="small"
-                    :placeholder="getRowState(row.id).meta.roll.hint"
-                    :disabled="row.is_operating === '否'"
-                    @change="() => scheduleDraft(row)"
-                  />
                 </FieldHintTooltip>
               </template>
             </el-table-column>
@@ -388,28 +370,26 @@
               <template #default="{ row }">
                 <FieldHintTooltip :hint="getRowState(row.id).meta.total.hint">
                   <el-select
-                    v-if="getRowState(row.id).meta.total.mode === 'select'"
                     v-model="row.total_count"
                     multiple
                     collapse-tags
                     collapse-tags-tooltip
-                    :placeholder="getRowState(row.id).meta.total.hint"
-                    size="small"
                     filterable
+                    allow-create
+                    default-first-option
+                    :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.total.hint)"
+                    size="small"
                     :disabled="row.is_operating === '否'"
-                    @visible-change="(v) => v && ensureTailOptions(row, getRowState(row.id))"
+                    @visible-change="(v) => v && onDropdownVisible(row, 'total_count')"
                     @change="() => scheduleDraft(row)"
                   >
-                    <el-option v-for="o in getRowState(row.id).options.total" :key="o" :label="o" :value="o" />
+                    <el-option
+                      v-for="o in mergeSelectOptions(getRowState(row.id).options.total, row.total_count, 'total_count')"
+                      :key="o"
+                      :label="o"
+                      :value="o"
+                    />
                   </el-select>
-                  <el-input
-                    v-else
-                    v-model="row.total_count"
-                    size="small"
-                    :placeholder="getRowState(row.id).meta.total.hint"
-                    :disabled="row.is_operating === '否'"
-                    @change="() => scheduleDraft(row)"
-                  />
                 </FieldHintTooltip>
               </template>
             </el-table-column>
@@ -509,12 +489,14 @@ import {
   onDropdownVisible as loadDropdownOptions,
   onRowCascadeChange,
   onRowOperatingChange,
-  ensureTailOptions,
   MULTI_SELECT_FIELDS,
   normalizeRowFields,
   serializeMultiField,
   syncRuleVersion,
   clearRowOptionCache,
+  clearPathOptionsCache,
+  mergeSelectOptions,
+  hintOrTypePlaceholder,
 } from '@/composables/useClassificationCascade'
 import {
   resolveFilterValues,
@@ -861,16 +843,19 @@ function handlePageSizeChange() {
 async function loadTasks() {
   loading.value = true
   try {
-    // 规则若已更新，清掉行内旧下拉缓存，避免仍显示上一版选项
+    // 规则若已更新，清掉 path 缓存与行内旧选项
     const versionChanged = await syncRuleVersion()
     if (versionChanged) {
+      clearPathOptionsCache()
       Object.keys(rowStates).forEach((id) => clearRowOptionCache(rowStates[id]))
     }
     const res = await myTasksApi(buildQueryParams())
     const items = (res.data.items || []).map(normalizeRow)
     tableData.value = items
     total.value = res.data.total || 0
-    await loadGlobalLargeOptions(true)
+    // 大类全局选项走缓存；仅版本变化时强制刷新
+    await loadGlobalLargeOptions(versionChanged)
+    // A：不再为每行预拉全部下级选项，仅规范化字段；展开下拉时再请求
     for (const row of items) {
       await initRowCascade(row, getRowState(row.id))
     }

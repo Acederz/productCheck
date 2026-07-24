@@ -3,7 +3,7 @@
  * 选项来自分类规则；选了大类后，区隔取所选大类下选项的并集。
  */
 import { reactive, ref } from 'vue'
-import { getRuleOptionsApi } from '@/api/rules'
+import { getCachedRuleOptions, syncRuleVersion } from '@/composables/useClassificationCascade'
 
 /** 多选筛选项：未选或全选视为「全部」，不传查询参数 */
 export function resolveFilterValues(selected, allOptions) {
@@ -28,8 +28,9 @@ export function useCategoryQueryFilters() {
   /** 加载全部大类选项 */
   async function loadCategoryLargeOptions() {
     try {
-      const res = await getRuleOptionsApi('大类', {})
-      categoryLargeOptions.value = res.data?.options || []
+      await syncRuleVersion()
+      const data = await getCachedRuleOptions('大类', {})
+      categoryLargeOptions.value = data.options || []
     } catch (e) {
       categoryLargeOptions.value = []
       console.error('加载大类筛选项失败', e)
@@ -39,13 +40,13 @@ export function useCategoryQueryFilters() {
   /** 按当前已选大类加载区隔（空则加载全量并集） */
   async function loadCategorySegmentOptions() {
     try {
+      await syncRuleVersion()
       const path = {}
       if (categoryFilters.category_large?.length) {
         path['大类'] = [...categoryFilters.category_large]
       }
-      const res = await getRuleOptionsApi('区隔', path)
-      categorySegmentOptions.value = res.data?.options || []
-      // 去掉已不在新选项中的区隔选择
+      const data = await getCachedRuleOptions('区隔', path)
+      categorySegmentOptions.value = data.options || []
       const allowed = new Set(categorySegmentOptions.value)
       categoryFilters.category_segment = categoryFilters.category_segment.filter((v) =>
         allowed.has(v),
