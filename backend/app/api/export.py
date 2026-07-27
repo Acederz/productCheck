@@ -58,6 +58,7 @@ def export_approved():
         keyword=request.args.get("keyword", "").strip() or None,
         category_large=request.args.get("category_large", "").strip() or None,
         category_segment=request.args.get("category_segment", "").strip() or None,
+        batch_id=request.args.get("batch_id"),
     )
 
     count = query.count()

@@ -1,5 +1,7 @@
 """数据库初始化脚本。"""
 
+from sqlalchemy import inspect, text
+
 from app.constants import ROLE_ADMIN
 from app.extensions import db
 from app.models import (
@@ -17,11 +19,36 @@ from app.models import (
 from app.models.user import SystemConfig
 
 
-def init_database(app):
-    """创建表并初始化默认数据。"""
+def ensure_schema(app):
+    """
+    创建缺失表，并为已有库补齐增量字段。
+
+    说明：SQLAlchemy create_all 不会 ALTER 已有表，生产更新需执行本函数。
+    """
     with app.app_context():
         db.create_all()
+        inspector = inspect(db.engine)
+        if "approved_products" not in inspector.get_table_names():
+            return
 
+        cols = {c["name"] for c in inspector.get_columns("approved_products")}
+        if "batch_id" not in cols:
+            # MySQL：正式库增加来源批次字段
+            db.session.execute(
+                text(
+                    "ALTER TABLE approved_products "
+                    "ADD COLUMN batch_id BIGINT NULL, "
+                    "ADD INDEX ix_approved_products_batch_id (batch_id)"
+                )
+            )
+            db.session.commit()
+            print("已为 approved_products 增加 batch_id 字段")
+
+
+def init_database(app):
+    """创建数据库表并初始化默认数据。"""
+    ensure_schema(app)
+    with app.app_context():
         # 默认管理员
         admin = User.query.filter_by(username=app.config["ADMIN_USERNAME"]).first()
         if not admin:
@@ -56,7 +83,7 @@ def reset_keep_admin_and_rules(app):
     会删除：操作员账号、导入批次、任务、草稿、正式库、各类操作日志等。
     """
     with app.app_context():
-        db.create_all()
+        ensure_schema(app)
 
         # 按外键依赖顺序删除业务表（规则表不动）
         clear_order = [

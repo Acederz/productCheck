@@ -6,13 +6,22 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
-from app.constants import EXCEL_HEADERS, PLATFORMS, TASK_STATUS_UNASSIGNED
+from app.constants import (
+    EXCEL_HEADERS,
+    EXCEL_OPERATOR_HEADER,
+    PLATFORMS,
+    ROLE_OPERATOR,
+    TASK_STATUS_PENDING,
+    TASK_STATUS_UNASSIGNED,
+)
 from app.extensions import db
+from app.models.log import AssignmentLog
 from app.models.task import ClassificationTask, ImportBatch
+from app.models.user import User
 from app.services.operation_log_service import write_operation_log
 from app.utils.excel_helper import cell_str, parse_desc_images, parse_segment
 
-# Excel 列名 -> 模型字段
+# Excel 列名 -> 模型字段（业务 19 列）
 HEADER_FIELD_MAP = {
     "序号": "row_no",
     "宝贝ID": "product_id",
@@ -47,15 +56,44 @@ class ImportService:
         """生成导入批次号。"""
         return datetime.now().strftime("%Y%m%d%H%M%S") + uuid.uuid4().hex[:6]
 
-    def _validate_headers(self, headers: list) -> str | None:
-        """校验表头是否与模板一致。"""
-        normalized = [cell_str(h) for h in headers[: len(EXCEL_HEADERS)]]
+    def _validate_headers(self, headers: list) -> tuple[str | None, bool]:
+        """
+        校验表头。
+
+        返回:
+            (错误信息, 是否包含操作员列)
+        """
+        normalized = [cell_str(h) for h in headers]
+        # 去掉尾部空表头
+        while normalized and not normalized[-1]:
+            normalized.pop()
+
         if len(normalized) < len(EXCEL_HEADERS):
-            return f"表头列数不足，需要 {len(EXCEL_HEADERS)} 列"
+            return f"表头列数不足，需要至少 {len(EXCEL_HEADERS)} 列", False
+
         for idx, expected in enumerate(EXCEL_HEADERS):
             if normalized[idx] != expected:
-                return f"第 {idx + 1} 列表头应为「{expected}」，实际为「{normalized[idx]}」"
-        return None
+                return (
+                    f"第 {idx + 1} 列表头应为「{expected}」，实际为「{normalized[idx]}」",
+                    False,
+                )
+
+        has_operator = False
+        if len(normalized) > len(EXCEL_HEADERS):
+            extra = normalized[len(EXCEL_HEADERS)]
+            if extra != EXCEL_OPERATOR_HEADER:
+                return (
+                    f"第 {len(EXCEL_HEADERS) + 1} 列表头应为「{EXCEL_OPERATOR_HEADER}」"
+                    f"或省略，实际为「{extra}」",
+                    False,
+                )
+            has_operator = True
+            # 允许操作员列后再有空列；非空多余列报错
+            for idx in range(len(EXCEL_HEADERS) + 1, len(normalized)):
+                if normalized[idx]:
+                    return f"不支持第 {idx + 1} 列表头「{normalized[idx]}」", False
+
+        return None, has_operator
 
     def _validate_row(self, row_data: dict, excel_row_no: int) -> str | None:
         """行级校验，返回错误信息。"""
@@ -73,7 +111,35 @@ class ImportService:
             return f"第 {excel_row_no} 行：数据平台「{platform}」不合法"
         return None
 
-    def _row_to_task(self, row_data: dict, batch_id: int) -> ClassificationTask:
+    def _load_operator_map(self) -> dict[str, User]:
+        """启用中的操作员：用户名 -> 用户。"""
+        users = User.query.filter_by(role=ROLE_OPERATOR, is_active=True).all()
+        return {u.username: u for u in users}
+
+    def _resolve_assignee(
+        self, operator_name: str, operator_map: dict[str, User]
+    ) -> tuple[User | None, str | None]:
+        """
+        解析操作员列。
+
+        返回:
+            (匹配到的操作员, 提醒文案)；空值两者皆空；匹配失败仅有提醒。
+        """
+        name = cell_str(operator_name)
+        if not name:
+            return None, None
+        user = operator_map.get(name)
+        if user:
+            return user, None
+        return None, f"操作员「{name}」未匹配或已停用，已按未分发导入"
+
+    def _row_to_task(
+        self,
+        row_data: dict,
+        batch_id: int,
+        assignee: User | None = None,
+        assigned_at: datetime | None = None,
+    ) -> ClassificationTask:
         """将解析后的行数据转为任务对象。"""
         row_no_raw = row_data.get("row_no")
         row_no = None
@@ -89,6 +155,7 @@ class ImportService:
         elif segment is None:
             segment = []
 
+        status = TASK_STATUS_PENDING if assignee else TASK_STATUS_UNASSIGNED
         return ClassificationTask(
             batch_id=batch_id,
             row_no=row_no,
@@ -110,25 +177,33 @@ class ImportService:
             size=cell_str(row_data.get("size")) or None,
             roll_count=cell_str(row_data.get("roll_count")) or None,
             total_count=cell_str(row_data.get("total_count")) or None,
-            status=TASK_STATUS_UNASSIGNED,
+            status=status,
+            assignee_id=assignee.id if assignee else None,
+            assigned_at=assigned_at if assignee else None,
         )
 
-    def _write_error_report(self, batch_no: str, error_rows: list) -> str | None:
-        """生成错误明细 Excel，返回文件路径。"""
+    def _write_error_report(
+        self, batch_no: str, error_rows: list, has_operator_col: bool
+    ) -> str | None:
+        """生成错误/提醒明细 Excel，返回文件路径。"""
         if not error_rows:
             return None
+
+        headers = [*EXCEL_HEADERS]
+        if has_operator_col:
+            headers.append(EXCEL_OPERATOR_HEADER)
 
         wb = Workbook()
         ws = wb.active
         ws.title = "错误明细"
-        ws.append(["Excel行号", "错误原因", *EXCEL_HEADERS])
+        ws.append(["Excel行号", "错误原因", *headers])
 
         for item in error_rows:
             ws.append(
                 [
                     item["row_no"],
                     item["reason"],
-                    *[item["raw"].get(h, "") for h in EXCEL_HEADERS],
+                    *[item["raw"].get(h, "") for h in headers],
                 ]
             )
 
@@ -137,7 +212,7 @@ class ImportService:
         return str(error_path)
 
     def import_excel(self, file_storage, user_id: int) -> ImportBatch:
-        """执行 Excel 导入。"""
+        """执行 Excel 导入（支持可选操作员列自动分配）。"""
         batch_no = self._gen_batch_no()
         safe_name = file_storage.filename or "import.xlsx"
         saved_path = self.upload_folder / f"{batch_no}_{safe_name}"
@@ -164,14 +239,19 @@ class ImportService:
             db.session.commit()
             raise ValueError("Excel 文件为空")
 
-        header_error = self._validate_headers(list(rows[0]))
+        header_error, has_operator_col = self._validate_headers(list(rows[0]))
         if header_error:
             batch.status = "failed"
             db.session.commit()
             raise ValueError(header_error)
 
-        success_tasks = []
-        error_rows = []
+        operator_map = self._load_operator_map() if has_operator_col else {}
+        operator_col_idx = len(EXCEL_HEADERS) if has_operator_col else None
+        now = datetime.utcnow()
+
+        success_tasks: list[ClassificationTask] = []
+        hard_errors: list[dict] = []
+        warnings: list[dict] = []
         total = 0
 
         for idx, row in enumerate(rows[1:], start=2):
@@ -192,23 +272,58 @@ class ImportService:
                 else:
                     row_data[field] = val
 
+            operator_raw = ""
+            if has_operator_col:
+                operator_raw = (
+                    row[operator_col_idx] if operator_col_idx < len(row) else None
+                )
+                raw_map[EXCEL_OPERATOR_HEADER] = operator_raw
+
             err = self._validate_row(row_data, idx)
             if err:
-                error_rows.append({"row_no": idx, "reason": err, "raw": raw_map})
+                hard_errors.append({"row_no": idx, "reason": err, "raw": raw_map})
                 continue
 
-            success_tasks.append(self._row_to_task(row_data, batch.id))
+            assignee, warn = self._resolve_assignee(operator_raw, operator_map)
+            if warn:
+                warnings.append(
+                    {
+                        "row_no": idx,
+                        "reason": f"提醒：{warn}",
+                        "raw": raw_map,
+                    }
+                )
 
-        if success_tasks:
-            db.session.bulk_save_objects(success_tasks)
+            task = self._row_to_task(
+                row_data, batch.id, assignee=assignee, assigned_at=now
+            )
+            db.session.add(task)
+            success_tasks.append(task)
 
-        error_report = self._write_error_report(batch_no, error_rows)
+        # 先落库拿到任务 ID，再写分配日志
+        db.session.flush()
+        assigned_count = 0
+        for task in success_tasks:
+            if not task.assignee_id:
+                continue
+            assigned_count += 1
+            db.session.add(
+                AssignmentLog(
+                    task_id=task.id,
+                    from_user_id=None,
+                    to_user_id=task.assignee_id,
+                    operator_id=user_id,
+                )
+            )
+
+        report_rows = [*hard_errors, *warnings]
+        error_report = self._write_error_report(batch_no, report_rows, has_operator_col)
 
         batch.total_rows = total
         batch.success_rows = len(success_tasks)
-        batch.fail_rows = len(error_rows)
+        batch.fail_rows = len(hard_errors)
         batch.error_report_path = error_report
-        batch.status = "completed" if success_tasks or not error_rows else "completed"
+        batch.status = "completed"
 
         write_operation_log(
             user_id=user_id,
@@ -220,7 +335,10 @@ class ImportService:
                 "file_name": safe_name,
                 "total_rows": total,
                 "success_rows": len(success_tasks),
-                "fail_rows": len(error_rows),
+                "fail_rows": len(hard_errors),
+                "warning_rows": len(warnings),
+                "assigned_rows": assigned_count,
+                "has_operator_col": has_operator_col,
             },
         )
         db.session.commit()

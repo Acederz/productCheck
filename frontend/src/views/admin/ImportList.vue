@@ -11,7 +11,9 @@
       >
         <el-button type="primary">选择文件</el-button>
         <template #tip>
-          <div class="tip">表头须与「分类平台表头.xlsx」一致，支持多平台混合导入</div>
+          <div class="tip">
+            表头须与「分类平台表头.xlsx」一致（19 列）；可在末尾加「操作员」列，填登录用户名即可导入时自动分配；留空则仍由管理员分配。
+          </div>
         </template>
       </el-upload>
       <el-button

@@ -24,6 +24,29 @@ def parse_csv_arg(raw) -> list[str]:
     return result
 
 
+def parse_int_ids(raw) -> list[int]:
+    """解析逗号分隔的整数 ID 列表（非法片段跳过）。"""
+    ids: list[int] = []
+    seen: set[int] = set()
+    for part in parse_csv_arg(raw):
+        if not part.isdigit():
+            continue
+        value = int(part)
+        if value in seen:
+            continue
+        seen.add(value)
+        ids.append(value)
+    return ids
+
+
+def apply_batch_id_filter(query, model, batch_id=None):
+    """按导入批次 ID 筛选（支持多选）。"""
+    batch_ids = parse_int_ids(batch_id)
+    if not batch_ids:
+        return query
+    return query.filter(model.batch_id.in_(batch_ids))
+
+
 def _json_string_literal(value: str) -> str:
     """生成 JSON_CONTAINS 所需的 JSON 字符串字面量。"""
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')

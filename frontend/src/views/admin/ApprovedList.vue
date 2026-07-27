@@ -22,6 +22,26 @@
             <el-option v-for="p in platformOptions" :key="p" :label="p" :value="p" />
           </el-select>
         </el-form-item>
+        <el-form-item label="批次号">
+          <el-select
+            v-model="selectedBatchIds"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            clearable
+            placeholder="全部"
+            style="width: 220px"
+            :loading="batchLoading"
+          >
+            <el-option
+              v-for="b in batchOptions"
+              :key="b.id"
+              :label="b.batch_no"
+              :value="b.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="大类">
           <el-select
             v-model="categoryFilters.category_large"
@@ -110,7 +130,6 @@
             fixed="left"
             show-overflow-tooltip
           />
-          <el-table-column prop="platform" label="平台" width="110" fixed="left" />
           <el-table-column label="产品属性" width="200" fixed="left">
             <template #default="{ row }">
               <div class="product-attr-cell" :title="formatProductAttr(row.product_attr)">
@@ -135,35 +154,41 @@
             <template #default="{ row }">{{ row.brand || '-' }}</template>
           </el-table-column>
 
-          <el-table-column prop="is_operating" label="是否经营" width="90" />
+          <el-table-column prop="is_operating" label="是否经营" width="90">
+            <template #default="{ row }">{{ formatClassify(row.is_operating) }}</template>
+          </el-table-column>
           <el-table-column label="大类" width="120" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatMulti(row.category_large) }}</template>
+            <template #default="{ row }">{{ formatClassify(row.category_large) }}</template>
           </el-table-column>
           <el-table-column label="区隔" width="120" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatMulti(row.category_segment) }}</template>
+            <template #default="{ row }">{{ formatClassify(row.category_segment) }}</template>
           </el-table-column>
           <el-table-column label="类别" width="120" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatMulti(row.category_type) }}</template>
+            <template #default="{ row }">{{ formatClassify(row.category_type) }}</template>
           </el-table-column>
           <el-table-column label="主材质" width="110" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatMulti(row.material_main) }}</template>
+            <template #default="{ row }">{{ formatClassify(row.material_main) }}</template>
           </el-table-column>
           <el-table-column label="辅材质" width="110" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatMulti(row.material_aux) }}</template>
+            <template #default="{ row }">{{ formatClassify(row.material_aux) }}</template>
           </el-table-column>
           <el-table-column label="包装方式" width="110" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatMulti(row.packaging) }}</template>
+            <template #default="{ row }">{{ formatClassify(row.packaging) }}</template>
           </el-table-column>
           <el-table-column label="尺寸" width="110" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatMulti(row.size) }}</template>
+            <template #default="{ row }">{{ formatClassify(row.size) }}</template>
           </el-table-column>
           <el-table-column label="卷数" width="100" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatMulti(row.roll_count) }}</template>
+            <template #default="{ row }">{{ formatClassify(row.roll_count) }}</template>
           </el-table-column>
           <el-table-column label="总入数" width="100" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatMulti(row.total_count) }}</template>
+            <template #default="{ row }">{{ formatClassify(row.total_count) }}</template>
           </el-table-column>
 
+          <el-table-column prop="batch_no" label="批次号" width="170" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.batch_no || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="platform" label="平台" width="110" />
           <el-table-column prop="version" label="版本" width="70" />
           <el-table-column prop="approved_by_name" label="审核人" width="100">
             <template #default="{ row }">{{ row.approved_by_name || '-' }}</template>
@@ -243,6 +268,7 @@ import {
   resolveFilterValues,
   useCategoryQueryFilters,
 } from '@/composables/useCategoryQueryFilters'
+import { useBatchQueryFilters } from '@/composables/useBatchQueryFilters'
 
 const {
   categoryFilters,
@@ -253,6 +279,15 @@ const {
   categoryQueryParams,
   resetCategoryFiltersAndOptions,
 } = useCategoryQueryFilters()
+
+const {
+  batchOptions,
+  selectedBatchIds,
+  batchLoading,
+  loadBatchOptions,
+  resetBatchFilters,
+  withBatchParams,
+} = useBatchQueryFilters()
 
 const loading = ref(false)
 const tableData = ref([])
@@ -283,6 +318,11 @@ function formatMulti(val) {
   if (val === null || val === undefined || val === '') return '-'
   if (Array.isArray(val)) return val.length ? val.join('，') : '-'
   return String(val)
+}
+
+/** 正式库分类字段展示：英文字母统一大写（不改库内原值） */
+function formatClassify(val) {
+  return formatMulti(val).toUpperCase()
 }
 
 function formatProductAttr(val) {
@@ -408,13 +448,13 @@ function openDescViewer(row) {
 }
 
 function buildQueryParams() {
-  return {
+  return withBatchParams({
     page: page.value,
     page_size: pageSize.value,
     platform: resolveFilterValues(filters.platform, platformOptions),
     keyword: filters.keyword?.trim() || undefined,
     ...categoryQueryParams(),
-  }
+  })
 }
 
 function handleSearch() {
@@ -425,6 +465,7 @@ function handleSearch() {
 async function handleReset() {
   filters.platform = []
   filters.keyword = ''
+  resetBatchFilters()
   await resetCategoryFiltersAndOptions()
   page.value = 1
   loadList()
@@ -450,14 +491,17 @@ async function loadList() {
 }
 
 async function handleExport() {
-  await downloadApprovedExport({
-    platform: resolveFilterValues(filters.platform, platformOptions),
-    keyword: filters.keyword?.trim() || undefined,
-    ...categoryQueryParams(),
-  })
+  await downloadApprovedExport(
+    withBatchParams({
+      platform: resolveFilterValues(filters.platform, platformOptions),
+      keyword: filters.keyword?.trim() || undefined,
+      ...categoryQueryParams(),
+    })
+  )
 }
 
 onMounted(async () => {
+  await loadBatchOptions()
   await initCategoryFilterOptions()
   await loadList()
 })

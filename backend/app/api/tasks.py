@@ -8,7 +8,7 @@ from app.models.task import ClassificationTask, TaskDraft
 from app.models.user import User
 from app.services.task_service import TaskService
 from app.utils.auth_decorator import admin_required, login_required
-from app.utils.query_filters import apply_category_filters, parse_csv_arg
+from app.utils.query_filters import apply_batch_id_filter, apply_category_filters, parse_csv_arg
 from app.utils.response import fail, success
 
 tasks_bp = Blueprint("tasks", __name__)
@@ -20,8 +20,21 @@ def _parse_csv_arg(name: str) -> list[str]:
     return parse_csv_arg(request.args.get(name, ""))
 
 
+def _batch_no_map(batch_ids: set) -> dict:
+    """批次 ID -> 批次号。"""
+    from app.models.task import ImportBatch
+
+    ids = [i for i in batch_ids if i]
+    if not ids:
+        return {}
+    return {
+        b.id: b.batch_no
+        for b in ImportBatch.query.filter(ImportBatch.id.in_(ids)).all()
+    }
+
+
 def _paginate(query):
-    """简单分页，附带操作员用户名。"""
+    """简单分页，附带操作员用户名与批次号。"""
     page = max(int(request.args.get("page", 1)), 1)
     page_size = min(max(int(request.args.get("page_size", 20)), 1), 200)
     total = query.count()
@@ -32,10 +45,12 @@ def _paginate(query):
         .all()
     )
     users = {u.id: u.username for u in User.query.all()}
+    batches = _batch_no_map({item.batch_id for item in items})
     result_items = []
     for item in items:
         data = item.to_dict()
         data["assignee_name"] = users.get(item.assignee_id, "") if item.assignee_id else ""
+        data["batch_no"] = batches.get(item.batch_id, "") if item.batch_id else ""
         result_items.append(data)
     return {
         "items": result_items,
@@ -61,8 +76,7 @@ def list_tasks():
         query = query.filter_by(status=status)
     if platform:
         query = query.filter_by(platform=platform)
-    if batch_id:
-        query = query.filter_by(batch_id=int(batch_id))
+    query = apply_batch_id_filter(query, ClassificationTask, batch_id)
     if keyword:
         like = f"%{keyword}%"
         query = query.filter(

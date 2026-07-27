@@ -38,6 +38,26 @@
             <el-option v-for="p in platformOptions" :key="p" :label="p" :value="p" />
           </el-select>
         </el-form-item>
+        <el-form-item label="批次号">
+          <el-select
+            v-model="selectedBatchIds"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            clearable
+            placeholder="全部"
+            style="width: 220px"
+            :loading="batchLoading"
+          >
+            <el-option
+              v-for="b in batchOptions"
+              :key="b.id"
+              :label="b.batch_no"
+              :value="b.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="大类">
           <el-select
             v-model="categoryFilters.category_large"
@@ -134,7 +154,6 @@
             fixed="left"
             show-overflow-tooltip
           />
-          <el-table-column prop="platform" label="平台" width="110" fixed="left" />
           <el-table-column label="产品属性" width="200" fixed="left">
             <template #default="{ row }">
               <div class="product-attr-cell" :title="formatProductAttr(row.product_attr)">
@@ -188,6 +207,10 @@
             <template #default="{ row }">{{ formatMulti(row.total_count) }}</template>
           </el-table-column>
           <el-table-column prop="submitted_at" label="提交时间" width="170" />
+          <el-table-column prop="batch_no" label="批次号" width="170" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.batch_no || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="platform" label="平台" width="110" />
           <el-table-column prop="status" label="状态" width="80" />
 
           <el-table-column label="操作" width="140" fixed="right">
@@ -290,6 +313,7 @@ import {
   resolveFilterValues,
   useCategoryQueryFilters,
 } from '@/composables/useCategoryQueryFilters'
+import { useBatchQueryFilters } from '@/composables/useBatchQueryFilters'
 
 const {
   categoryFilters,
@@ -300,6 +324,15 @@ const {
   categoryQueryParams,
   resetCategoryFiltersAndOptions,
 } = useCategoryQueryFilters()
+
+const {
+  batchOptions,
+  selectedBatchIds,
+  batchLoading,
+  loadBatchOptions,
+  resetBatchFilters,
+  withBatchParams,
+} = useBatchQueryFilters()
 
 const loading = ref(false)
 const rejecting = ref(false)
@@ -470,13 +503,13 @@ function onSelectionChange(rows) {
 }
 
 function buildQueryParams() {
-  return {
+  return withBatchParams({
     page: page.value,
     page_size: pageSize.value,
     platform: resolveFilterValues(filters.platform, platformOptions),
     keyword: filters.keyword?.trim() || undefined,
     ...categoryQueryParams(),
-  }
+  })
 }
 
 function handleSearch() {
@@ -487,6 +520,7 @@ function handleSearch() {
 async function handleReset() {
   filters.platform = []
   filters.keyword = ''
+  resetBatchFilters()
   await resetCategoryFiltersAndOptions()
   page.value = 1
   loadList()
@@ -558,6 +592,7 @@ async function handleRejectConfirm() {
 }
 
 onMounted(async () => {
+  await loadBatchOptions()
   await initCategoryFilterOptions()
   await loadList()
 })

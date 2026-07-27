@@ -8,7 +8,7 @@ from app.models.task import ClassificationTask
 from app.models.user import User
 from app.services.review_service import ReviewService
 from app.utils.auth_decorator import admin_required
-from app.utils.query_filters import apply_category_filters, parse_csv_arg
+from app.utils.query_filters import apply_batch_id_filter, apply_category_filters, parse_csv_arg
 from app.utils.response import fail, success
 
 reviews_bp = Blueprint("reviews", __name__)
@@ -18,6 +18,19 @@ review_service = ReviewService()
 def _parse_csv_arg(name: str) -> list[str]:
     """解析逗号分隔的查询参数。"""
     return parse_csv_arg(request.args.get(name, ""))
+
+
+def _batch_no_map(batch_ids: set) -> dict:
+    """批次 ID -> 批次号。"""
+    from app.models.task import ImportBatch
+
+    ids = [i for i in batch_ids if i]
+    if not ids:
+        return {}
+    return {
+        b.id: b.batch_no
+        for b in ImportBatch.query.filter(ImportBatch.id.in_(ids)).all()
+    }
 
 
 def _paginate_review_list():
@@ -30,6 +43,7 @@ def _paginate_review_list():
     platform_list = _parse_csv_arg("platform")
     keyword = request.args.get("keyword", "").strip()
     assignee_id = request.args.get("assignee_id", "").strip()
+    batch_id = request.args.get("batch_id", "")
     category_large = request.args.get("category_large", "")
     category_segment = request.args.get("category_segment", "")
 
@@ -45,6 +59,7 @@ def _paginate_review_list():
         )
     if assignee_id.isdigit():
         query = query.filter_by(assignee_id=int(assignee_id))
+    query = apply_batch_id_filter(query, ClassificationTask, batch_id)
     query = apply_category_filters(
         query, ClassificationTask, category_large, category_segment
     )
@@ -58,10 +73,12 @@ def _paginate_review_list():
     )
 
     users = {u.id: u.username for u in User.query.all()}
+    batches = _batch_no_map({item.batch_id for item in items})
     result_items = []
     for item in items:
         data = item.to_dict()
         data["assignee_name"] = users.get(item.assignee_id, "") if item.assignee_id else ""
+        data["batch_no"] = batches.get(item.batch_id, "") if item.batch_id else ""
         result_items.append(data)
 
     return {

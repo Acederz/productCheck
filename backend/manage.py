@@ -14,7 +14,7 @@ configure_stdio_utf8()
 import click
 
 from app import create_app
-from app.utils.init_db import init_database, reset_keep_admin_and_rules
+from app.utils.init_db import ensure_schema, init_database, reset_keep_admin_and_rules
 
 app = create_app()
 
@@ -23,6 +23,13 @@ app = create_app()
 def init_db_command():
     """创建数据库表并初始化默认管理员。"""
     init_database(app)
+
+
+@app.cli.command("ensure-schema")
+def ensure_schema_command():
+    """补齐表结构增量（如正式库 batch_id），不改业务数据。"""
+    ensure_schema(app)
+    click.echo("ensure-schema 完成")
 
 
 @app.cli.command("reset-keep-admin-rules")

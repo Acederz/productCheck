@@ -27,7 +27,7 @@ PLATFORMS = (
 ROLE_ADMIN = "admin"
 ROLE_OPERATOR = "operator"
 
-# Excel 表头（19 列，顺序固定）
+# Excel 业务表头（19 列，顺序固定；导出仍用此表头）
 EXCEL_HEADERS = (
     "序号",
     "宝贝ID",
@@ -49,6 +49,9 @@ EXCEL_HEADERS = (
     "宝贝链接",
     "数据平台",
 )
+
+# 导入可选附加列（紧跟在业务 19 列之后）
+EXCEL_OPERATOR_HEADER = "操作员"
 
 # 不可修改字段
 READONLY_FIELDS = {

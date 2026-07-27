@@ -22,7 +22,7 @@ def _batch_to_dict(batch: ImportBatch) -> dict:
 def list_imports():
     """导入批次列表。"""
     page = max(int(request.args.get("page", 1)), 1)
-    page_size = min(max(int(request.args.get("page_size", 20)), 1), 100)
+    page_size = min(max(int(request.args.get("page_size", 20)), 1), 500)
     query = ImportBatch.query.order_by(ImportBatch.id.desc())
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()

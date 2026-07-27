@@ -6,7 +6,7 @@ from app.extensions import db
 from app.models.approved import ApprovedProduct
 from app.models.user import User
 from app.utils.auth_decorator import admin_required
-from app.utils.query_filters import apply_category_filters, parse_csv_arg
+from app.utils.query_filters import apply_batch_id_filter, apply_category_filters, parse_csv_arg
 from app.utils.response import success
 
 approved_bp = Blueprint("approved", __name__)
@@ -17,7 +17,20 @@ def _parse_csv_arg(name: str) -> list[str]:
     return parse_csv_arg(request.args.get(name, ""))
 
 
-def _approved_to_dict(item: ApprovedProduct, users: dict) -> dict:
+def _batch_no_map(batch_ids: set) -> dict:
+    """批次 ID -> 批次号。"""
+    from app.models.task import ImportBatch
+
+    ids = [i for i in batch_ids if i]
+    if not ids:
+        return {}
+    return {
+        b.id: b.batch_no
+        for b in ImportBatch.query.filter(ImportBatch.id.in_(ids)).all()
+    }
+
+
+def _approved_to_dict(item: ApprovedProduct, users: dict, batches: dict) -> dict:
     """正式库记录转前端列表字典（字段与审核中心对齐）。"""
     return {
         "id": item.id,
@@ -40,6 +53,8 @@ def _approved_to_dict(item: ApprovedProduct, users: dict) -> dict:
         "desc_images": item.desc_images or [],
         "product_url": item.product_url,
         "platform": item.platform,
+        "batch_id": item.batch_id,
+        "batch_no": batches.get(item.batch_id, "") if item.batch_id else "",
         "version": item.version,
         "source_task_id": item.source_task_id,
         "approved_by": item.approved_by,
@@ -58,6 +73,7 @@ def list_approved():
     page_size = min(max(int(request.args.get("page_size", 20)), 1), 200)
     platform_list = _parse_csv_arg("platform")
     keyword = request.args.get("keyword", "").strip()
+    batch_id = request.args.get("batch_id", "")
     category_large = request.args.get("category_large", "")
     category_segment = request.args.get("category_segment", "")
 
@@ -72,6 +88,7 @@ def list_approved():
                 ApprovedProduct.product_name.like(like),
             )
         )
+    query = apply_batch_id_filter(query, ApprovedProduct, batch_id)
     query = apply_category_filters(
         query, ApprovedProduct, category_large, category_segment
     )
@@ -84,10 +101,11 @@ def list_approved():
         .all()
     )
     users = {u.id: u.username for u in User.query.all()}
+    batches = _batch_no_map({i.batch_id for i in items})
 
     return success(
         {
-            "items": [_approved_to_dict(i, users) for i in items],
+            "items": [_approved_to_dict(i, users, batches) for i in items],
             "total": total,
             "page": page,
             "page_size": page_size,

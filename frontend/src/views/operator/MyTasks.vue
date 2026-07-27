@@ -132,7 +132,6 @@
             </template>
           </el-table-column>
           <el-table-column prop="product_name" label="宝贝名称" width="160" fixed="left" show-overflow-tooltip />
-          <el-table-column prop="platform" label="平台" width="110" fixed="left" />
           <el-table-column label="产品属性" width="220" fixed="left">
             <template #default="{ row }">
               <div class="product-attr-cell" :title="formatProductAttr(row.product_attr)">
@@ -177,6 +176,7 @@
                   clearable
                   placeholder="大类"
                   size="small"
+                  empty-text="请填写"
                   filterable
                   :disabled="row.is_operating === '否'"
                   @visible-change="(v) => v && onDropdownVisible(row, 'category_large')"
@@ -194,8 +194,10 @@
                   multiple
                   collapse-tags
                   collapse-tags-tooltip
+                  clearable
                   placeholder="区隔"
                   size="small"
+                  empty-text="请填写"
                   filterable
                   :disabled="row.is_operating === '否'"
                   @visible-change="(v) => v && onDropdownVisible(row, 'category_segment')"
@@ -218,8 +220,10 @@
                   multiple
                   collapse-tags
                   collapse-tags-tooltip
+                  clearable
                   placeholder="类别"
                   size="small"
+                  empty-text="请填写"
                   filterable
                   :disabled="row.is_operating === '否'"
                   @visible-change="(v) => v && onDropdownVisible(row, 'category_type')"
@@ -237,8 +241,10 @@
                   multiple
                   collapse-tags
                   collapse-tags-tooltip
+                  clearable
                   placeholder="主材质"
                   size="small"
+                  empty-text="请填写"
                   filterable
                   :disabled="row.is_operating === '否'"
                   @visible-change="(v) => v && onDropdownVisible(row, 'material_main')"
@@ -262,11 +268,13 @@
                     multiple
                     collapse-tags
                     collapse-tags-tooltip
+                    clearable
                     filterable
                     allow-create
                     default-first-option
                     :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.materialAux.hint)"
                     size="small"
+                    empty-text="请填写"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'material_aux')"
                     @change="() => handleCascadeChange(row, 'material_aux')"
@@ -290,11 +298,13 @@
                     multiple
                     collapse-tags
                     collapse-tags-tooltip
+                    clearable
                     filterable
                     allow-create
                     default-first-option
                     :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.packaging.hint)"
                     size="small"
+                    empty-text="请填写"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'packaging')"
                     @change="() => handleCascadeChange(row, 'packaging')"
@@ -318,11 +328,13 @@
                     multiple
                     collapse-tags
                     collapse-tags-tooltip
+                    clearable
                     filterable
                     allow-create
                     default-first-option
                     :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.size.hint)"
                     size="small"
+                    empty-text="请填写"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'size')"
                     @change="() => handleCascadeChange(row, 'size')"
@@ -346,11 +358,13 @@
                     multiple
                     collapse-tags
                     collapse-tags-tooltip
+                    clearable
                     filterable
                     allow-create
                     default-first-option
                     :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.roll.hint)"
                     size="small"
+                    empty-text="请填写"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'roll_count')"
                     @change="() => scheduleDraft(row)"
@@ -374,11 +388,13 @@
                     multiple
                     collapse-tags
                     collapse-tags-tooltip
+                    clearable
                     filterable
                     allow-create
                     default-first-option
                     :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.total.hint)"
                     size="small"
+                    empty-text="请填写"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'total_count')"
                     @change="() => scheduleDraft(row)"
@@ -394,6 +410,7 @@
               </template>
             </el-table-column>
 
+          <el-table-column prop="platform" label="平台" width="110" />
           <el-table-column prop="status" label="状态" width="80" />
           <el-table-column label="驳回原因" width="120" show-overflow-tooltip>
             <template #default="{ row }">{{ row.reject_reason || '-' }}</template>

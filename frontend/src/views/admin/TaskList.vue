@@ -33,6 +33,26 @@
             <el-option v-for="p in platformOptions" :key="p" :label="p" :value="p" />
           </el-select>
         </el-form-item>
+        <el-form-item label="批次号">
+          <el-select
+            v-model="selectedBatchIds"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            clearable
+            placeholder="全部"
+            style="width: 220px"
+            :loading="batchLoading"
+          >
+            <el-option
+              v-for="b in batchOptions"
+              :key="b.id"
+              :label="b.batch_no"
+              :value="b.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="关键词">
           <el-input v-model="filters.keyword" placeholder="宝贝ID/名称" clearable style="width: 180px" />
         </el-form-item>
@@ -53,6 +73,9 @@
         <el-table-column prop="product_id" label="宝贝ID" width="140" />
         <el-table-column prop="product_name" label="宝贝名称" min-width="180" show-overflow-tooltip />
         <el-table-column prop="platform" label="数据平台" width="130" />
+        <el-table-column prop="batch_no" label="批次号" width="170" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.batch_no || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="assignee_name" label="操作员" width="100">
           <template #default="{ row }">{{ row.assignee_name || '-' }}</template>
         </el-table-column>
@@ -96,6 +119,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { assignTasksApi, listTasksApi, withdrawTasksApi } from '@/api/tasks'
 import { listUsersApi } from '@/api/users'
+import { useBatchQueryFilters } from '@/composables/useBatchQueryFilters'
 
 const loading = ref(false)
 const assigning = ref(false)
@@ -112,6 +136,13 @@ const statusOptions = ['未分发', '待处理', '待审核', '已驳回', '已�
 const platformOptions = ['淘宝', '京东', '消费者洞察淘宝', '消费者洞察京东']
 
 const filters = reactive({ status: '', platform: '', keyword: '' })
+const {
+  batchOptions,
+  selectedBatchIds,
+  batchLoading,
+  loadBatchOptions,
+  withBatchParams,
+} = useBatchQueryFilters()
 
 function onSelectionChange(rows) {
   selectedIds.value = rows.map((r) => r.id)
@@ -120,13 +151,15 @@ function onSelectionChange(rows) {
 async function loadTasks() {
   loading.value = true
   try {
-    const res = await listTasksApi({
-      page: page.value,
-      page_size: pageSize.value,
-      status: filters.status || undefined,
-      platform: filters.platform || undefined,
-      keyword: filters.keyword || undefined,
-    })
+    const res = await listTasksApi(
+      withBatchParams({
+        page: page.value,
+        page_size: pageSize.value,
+        status: filters.status || undefined,
+        platform: filters.platform || undefined,
+        keyword: filters.keyword || undefined,
+      })
+    )
     tableData.value = res.data.items || []
     total.value = res.data.total || 0
   } finally {
@@ -162,6 +195,7 @@ async function handleWithdraw() {
 }
 
 onMounted(() => {
+  loadBatchOptions()
   loadTasks()
   loadOperators()
 })

@@ -31,6 +31,10 @@ class ApprovedProduct(db.Model):
     product_url = db.Column(db.Text, nullable=True)
     platform = db.Column(db.String(64), nullable=False)
     source_task_id = db.Column(db.BigInteger, nullable=True)
+    # 来源导入批次（审核通过时从任务写入，再次通过则覆盖）
+    batch_id = db.Column(
+        db.BigInteger, db.ForeignKey("import_batches.id"), nullable=True, index=True
+    )
     version = db.Column(db.Integer, nullable=False, default=1)
     approved_by = db.Column(db.BigInteger, db.ForeignKey("users.id"), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)

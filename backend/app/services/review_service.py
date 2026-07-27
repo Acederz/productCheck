@@ -35,6 +35,7 @@ class ReviewService:
             "desc_images": task.desc_images,
             "product_url": task.product_url,
             "platform": task.platform,
+            "batch_id": task.batch_id,
         }
 
     def _write_approved(self, task: ClassificationTask, admin_id: int) -> None:
@@ -66,6 +67,7 @@ class ReviewService:
                         "desc_images": existing.desc_images,
                         "product_url": existing.product_url,
                         "platform": existing.platform,
+                        "batch_id": existing.batch_id,
                         "version": existing.version,
                     },
                     replaced_by_task_id=task.id,

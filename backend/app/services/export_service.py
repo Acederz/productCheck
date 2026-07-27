@@ -11,6 +11,11 @@ from app.extensions import db
 from app.models.approved import ApprovedProduct
 from app.models.task import ClassificationTask
 from app.models.user import User
+from app.utils.export_clean import (
+    clean_and_upper_classification_value,
+    clean_export_classification_value,
+    upper_classification_text,
+)
 
 # 导出附加列（任务）
 TASK_EXTRA_HEADERS = (
@@ -58,13 +63,14 @@ class ExportService:
             task.is_operating or "",
             task.category_large or "",
             segment,
-            task.category_type or "",
-            task.material_main or "",
-            task.material_aux or "",
-            task.packaging or "",
-            task.size or "",
-            task.roll_count or "",
-            task.total_count or "",
+            # 自「类别」起导出清洗：去括号内容（白名单除外）、「-」置空
+            clean_export_classification_value(task.category_type),
+            clean_export_classification_value(task.material_main),
+            clean_export_classification_value(task.material_aux),
+            clean_export_classification_value(task.packaging),
+            clean_export_classification_value(task.size),
+            clean_export_classification_value(task.roll_count),
+            clean_export_classification_value(task.total_count),
             task.product_attr or "",
             desc,
             task.product_url or "",
@@ -86,7 +92,7 @@ class ExportService:
         ]
 
     def _approved_base_row(self, item: ApprovedProduct) -> list:
-        """正式库 19 列。"""
+        """正式库 19 列（分类字段英文字母导出为大写）。"""
         segment = "，".join(item.category_segment or []) if item.category_segment else ""
         desc = ""
         if item.desc_images:
@@ -97,16 +103,17 @@ class ExportService:
             item.main_image or "",
             item.product_name or "",
             item.brand or "",
-            item.is_operating or "",
-            item.category_large or "",
-            segment,
-            item.category_type or "",
-            item.material_main or "",
-            item.material_aux or "",
-            item.packaging or "",
-            item.size or "",
-            item.roll_count or "",
-            item.total_count or "",
+            upper_classification_text(item.is_operating),
+            upper_classification_text(item.category_large),
+            upper_classification_text(segment),
+            # 自「类别」起：先清洗括号/横杠，再英文字母大写
+            clean_and_upper_classification_value(item.category_type),
+            clean_and_upper_classification_value(item.material_main),
+            clean_and_upper_classification_value(item.material_aux),
+            clean_and_upper_classification_value(item.packaging),
+            clean_and_upper_classification_value(item.size),
+            clean_and_upper_classification_value(item.roll_count),
+            clean_and_upper_classification_value(item.total_count),
             item.product_attr or "",
             desc,
             item.product_url or "",
@@ -171,15 +178,14 @@ class ExportService:
         category_segment=None,
     ):
         """构建任务导出查询。"""
-        from app.utils.query_filters import apply_category_filters
+        from app.utils.query_filters import apply_batch_id_filter, apply_category_filters
 
         query = ClassificationTask.query
         if status:
             query = query.filter_by(status=status)
         if platform:
             query = query.filter_by(platform=platform)
-        if batch_id:
-            query = query.filter_by(batch_id=int(batch_id))
+        query = apply_batch_id_filter(query, ClassificationTask, batch_id)
         if keyword:
             like = f"%{keyword}%"
             query = query.filter(
@@ -193,10 +199,15 @@ class ExportService:
         )
 
     def filter_approved(
-        self, platform=None, keyword=None, category_large=None, category_segment=None
+        self,
+        platform=None,
+        keyword=None,
+        category_large=None,
+        category_segment=None,
+        batch_id=None,
     ):
         """构建正式库导出查询。"""
-        from app.utils.query_filters import apply_category_filters
+        from app.utils.query_filters import apply_batch_id_filter, apply_category_filters
 
         query = ApprovedProduct.query
         if platform:
@@ -213,6 +224,7 @@ class ExportService:
                     ApprovedProduct.product_name.like(like),
                 )
             )
+        query = apply_batch_id_filter(query, ApprovedProduct, batch_id)
         return apply_category_filters(
             query, ApprovedProduct, category_large, category_segment
         )
