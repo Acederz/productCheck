@@ -176,7 +176,8 @@
                   clearable
                   placeholder="大类"
                   size="small"
-                  empty-text="请填写"
+                  no-data-text="请填写"
+                  no-match-text="请填写"
                   filterable
                   :disabled="row.is_operating === '否'"
                   @visible-change="(v) => v && onDropdownVisible(row, 'category_large')"
@@ -197,7 +198,8 @@
                   clearable
                   placeholder="区隔"
                   size="small"
-                  empty-text="请填写"
+                  no-data-text="请填写"
+                  no-match-text="请填写"
                   filterable
                   :disabled="row.is_operating === '否'"
                   @visible-change="(v) => v && onDropdownVisible(row, 'category_segment')"
@@ -223,7 +225,8 @@
                   clearable
                   placeholder="类别"
                   size="small"
-                  empty-text="请填写"
+                  no-data-text="请填写"
+                  no-match-text="请填写"
                   filterable
                   :disabled="row.is_operating === '否'"
                   @visible-change="(v) => v && onDropdownVisible(row, 'category_type')"
@@ -244,7 +247,8 @@
                   clearable
                   placeholder="主材质"
                   size="small"
-                  empty-text="请填写"
+                  no-data-text="请填写"
+                  no-match-text="请填写"
                   filterable
                   :disabled="row.is_operating === '否'"
                   @visible-change="(v) => v && onDropdownVisible(row, 'material_main')"
@@ -274,7 +278,8 @@
                     default-first-option
                     :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.materialAux.hint)"
                     size="small"
-                    empty-text="请填写"
+                    no-data-text="请填写"
+                    no-match-text="请填写"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'material_aux')"
                     @change="() => handleCascadeChange(row, 'material_aux')"
@@ -304,7 +309,8 @@
                     default-first-option
                     :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.packaging.hint)"
                     size="small"
-                    empty-text="请填写"
+                    no-data-text="请填写"
+                    no-match-text="请填写"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'packaging')"
                     @change="() => handleCascadeChange(row, 'packaging')"
@@ -334,7 +340,8 @@
                     default-first-option
                     :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.size.hint)"
                     size="small"
-                    empty-text="请填写"
+                    no-data-text="请填写"
+                    no-match-text="请填写"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'size')"
                     @change="() => handleCascadeChange(row, 'size')"
@@ -364,7 +371,8 @@
                     default-first-option
                     :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.roll.hint)"
                     size="small"
-                    empty-text="请填写"
+                    no-data-text="请填写"
+                    no-match-text="请填写"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'roll_count')"
                     @change="() => scheduleDraft(row)"
@@ -394,7 +402,8 @@
                     default-first-option
                     :placeholder="hintOrTypePlaceholder(getRowState(row.id).meta.total.hint)"
                     size="small"
-                    empty-text="请填写"
+                    no-data-text="请填写"
+                    no-match-text="请填写"
                     :disabled="row.is_operating === '否'"
                     @visible-change="(v) => v && onDropdownVisible(row, 'total_count')"
                     @change="() => scheduleDraft(row)"
