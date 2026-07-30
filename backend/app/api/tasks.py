@@ -2,9 +2,16 @@
 
 from flask import Blueprint, g, request
 
-from app.constants import ROLE_ADMIN, ROLE_OPERATOR, TASK_STATUS_PENDING, TASK_STATUS_REJECTED
+from app.constants import (
+    ROLE_ADMIN,
+    ROLE_OPERATOR,
+    TASK_STATUS_APPROVED,
+    TASK_STATUS_PENDING,
+    TASK_STATUS_REJECTED,
+    TASK_STATUS_REVIEW,
+)
 from app.extensions import db
-from app.models.task import ClassificationTask, TaskDraft
+from app.models.task import ClassificationTask, ImportBatch, TaskDraft
 from app.models.user import User
 from app.services.task_service import TaskService
 from app.utils.auth_decorator import admin_required, login_required
@@ -22,8 +29,6 @@ def _parse_csv_arg(name: str) -> list[str]:
 
 def _batch_no_map(batch_ids: set) -> dict:
     """批次 ID -> 批次号。"""
-    from app.models.task import ImportBatch
-
     ids = [i for i in batch_ids if i]
     if not ids:
         return {}
@@ -141,6 +146,61 @@ def my_tasks():
                     item[key] = val
 
     return success(result)
+
+
+@tasks_bp.get("/my/stats")
+@login_required
+def my_task_stats():
+    """
+    操作员填写进度统计。
+
+    范围：管理员最近一次成功导入批次中、分配给当前操作员的任务。
+    """
+    if g.current_user.role != ROLE_OPERATOR:
+        return fail("仅操作人员可访问", 403)
+
+    latest = (
+        ImportBatch.query.filter_by(status="completed")
+        .order_by(ImportBatch.id.desc())
+        .first()
+    )
+    empty = {
+        "batch_id": None,
+        "batch_no": "",
+        "total": 0,
+        "pending": 0,
+        "submitted": 0,
+        "approved": 0,
+    }
+    if not latest:
+        return success(empty)
+
+    # 按状态一次分组，避免多次 count
+    rows = (
+        db.session.query(ClassificationTask.status, db.func.count(ClassificationTask.id))
+        .filter(
+            ClassificationTask.assignee_id == g.current_user.id,
+            ClassificationTask.batch_id == latest.id,
+        )
+        .group_by(ClassificationTask.status)
+        .all()
+    )
+    by_status = {status: int(cnt) for status, cnt in rows}
+    pending = by_status.get(TASK_STATUS_PENDING, 0) + by_status.get(TASK_STATUS_REJECTED, 0)
+    submitted = by_status.get(TASK_STATUS_REVIEW, 0)
+    approved = by_status.get(TASK_STATUS_APPROVED, 0)
+    total = sum(by_status.values())
+
+    return success(
+        {
+            "batch_id": latest.id,
+            "batch_no": latest.batch_no,
+            "total": total,
+            "pending": pending,
+            "submitted": submitted,
+            "approved": approved,
+        }
+    )
 
 
 @tasks_bp.get("/<int:task_id>")

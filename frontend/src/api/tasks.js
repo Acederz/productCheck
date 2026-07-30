@@ -8,6 +8,11 @@ export function myTasksApi(params) {
   return request.get('/tasks/my', { params })
 }
 
+/** 操作员：最新导入批次下的填写统计 */
+export function myTaskStatsApi() {
+  return request.get('/tasks/my/stats')
+}
+
 export function getTaskApi(id) {
   return request.get(`/tasks/${id}`)
 }

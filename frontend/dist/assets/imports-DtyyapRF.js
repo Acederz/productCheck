@@ -1,1 +1,0 @@
-import{y as o}from"./index-A9Xf5mk-.js";function e(t){return o.get("/imports",{params:t})}function a(t){const r=new FormData;return r.append("file",t),o.post("/imports",r,{headers:{"Content-Type":"multipart/form-data"}})}export{e as l,a as u};

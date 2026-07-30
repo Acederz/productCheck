@@ -3,7 +3,16 @@
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span>我的任务</span>
+          <div class="header-left">
+            <span class="page-title">我的任务</span>
+            <div class="task-stats" title="统计范围：管理员最近一次成功导入批次中分给你的数据">
+              <span class="stat-item is-total">总数据 <b>{{ taskStats.total }}</b></span>
+              <span class="stat-item is-pending">待处理 <b>{{ taskStats.pending }}</b></span>
+              <span class="stat-item is-submitted">已提交 <b>{{ taskStats.submitted }}</b></span>
+              <span class="stat-item is-approved">已通过 <b>{{ taskStats.approved }}</b></span>
+              <span v-if="taskStats.batch_no" class="stat-batch">批次 {{ taskStats.batch_no }}</span>
+            </div>
+          </div>
           <el-button
             type="primary"
             :disabled="!selectedIds.length"
@@ -529,7 +538,7 @@ import {
   useCategoryQueryFilters,
 } from '@/composables/useCategoryQueryFilters'
 import FieldHintTooltip from '@/components/FieldHintTooltip.vue'
-import { myTasksApi, saveDraftApi, submitTasksApi, updateTaskApi } from '@/api/tasks'
+import { myTasksApi, myTaskStatsApi, saveDraftApi, submitTasksApi, updateTaskApi } from '@/api/tasks'
 import { useUserStore } from '@/stores/user'
 
 const {
@@ -549,6 +558,15 @@ const selectedIds = ref([])
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
+/** 最新导入批次填写进度（与列表筛选无关） */
+const taskStats = reactive({
+  batch_id: null,
+  batch_no: '',
+  total: 0,
+  pending: 0,
+  submitted: 0,
+  approved: 0,
+})
 const rowStates = reactive({})
 const draftFlags = reactive({})
 const draftTimers = {}
@@ -866,6 +884,21 @@ function handlePageSizeChange() {
   loadTasks()
 }
 
+async function loadTaskStats() {
+  try {
+    const res = await myTaskStatsApi()
+    const data = res.data || {}
+    taskStats.batch_id = data.batch_id ?? null
+    taskStats.batch_no = data.batch_no || ''
+    taskStats.total = data.total || 0
+    taskStats.pending = data.pending || 0
+    taskStats.submitted = data.submitted || 0
+    taskStats.approved = data.approved || 0
+  } catch {
+    // 统计失败不阻断列表
+  }
+}
+
 async function loadTasks() {
   loading.value = true
   try {
@@ -885,6 +918,7 @@ async function loadTasks() {
     for (const row of items) {
       await initRowCascade(row, getRowState(row.id))
     }
+    await loadTaskStats()
   } finally {
     loading.value = false
   }
@@ -929,8 +963,54 @@ onUnmounted(stopDescDrag)
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
-.filter-form {
+.header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.page-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2329;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+.task-stats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+  color: #909399;
+}
+.task-stats .stat-item b {
+  margin-left: 4px;
+  font-weight: 700;
+  font-size: 16px;
+}
+.task-stats .is-total b {
+  color: #303133;
+}
+.task-stats .is-pending b {
+  color: #e6a23c;
+}
+.task-stats .is-submitted b {
+  color: #409eff;
+}
+.task-stats .is-approved b {
+  color: #67c23a;
+}
+.task-stats .stat-batch {
+  color: #c0c4cc;
+  font-size: 12px;
+  padding-left: 4px;
+  border-left: 1px solid #e4e7ed;
+}.filter-form {
   margin-bottom: 12px;
 }
 .table-pagination {

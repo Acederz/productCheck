@@ -79,7 +79,6 @@
         <el-table-column prop="assignee_name" label="操作员" width="100">
           <template #default="{ row }">{{ row.assignee_name || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="category_large" label="大类" width="100" />
         <el-table-column prop="status" label="状态" width="90" />
       </el-table>
 
