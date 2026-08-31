@@ -90,6 +90,8 @@ async function handleUpload() {
     )
     selectedFile.value = null
     await loadBatches()
+  } catch (e) {
+    // 错误提示已由 request 拦截器弹出（含后端表头校验等原因）
   } finally {
     uploading.value = false
   }

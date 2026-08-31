@@ -31,7 +31,9 @@ request.interceptors.response.use(
     return res
   },
   (error) => {
-    ElMessage.error(error.message || '网络错误')
+    // HTTP 4xx/5xx 时优先展示后端返回的中文 message（如导入表头校验失败）
+    const serverMsg = error.response?.data?.message
+    ElMessage.error(serverMsg || error.message || '网络错误')
     return Promise.reject(error)
   }
 )
