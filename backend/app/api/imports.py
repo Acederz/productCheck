@@ -88,3 +88,20 @@ def download_errors(batch_id: int):
         as_attachment=True,
         download_name=f"errors_{batch.batch_no}.xlsx",
     )
+
+
+@imports_bp.delete("/<int:batch_id>")
+@admin_required
+def delete_import_batch(batch_id: int):
+    """按批次删除导入数据（任务、匹配正式库、批次记录）。"""
+    service = ImportService(Path(current_app.config["UPLOAD_FOLDER"]))
+    try:
+        result = service.delete_batch(batch_id, g.current_user.id)
+    except ValueError as exc:
+        msg = str(exc)
+        code = 404 if "不存在" in msg else 400
+        return fail(msg, code)
+    except Exception as exc:
+        db.session.rollback()
+        return fail(f"删除失败：{exc}", 500)
+    return success(result, message="删除完成")

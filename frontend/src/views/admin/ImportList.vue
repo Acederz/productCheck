@@ -37,7 +37,7 @@
         <el-table-column prop="fail_rows" label="失败" width="80" />
         <el-table-column prop="status" label="状态" width="100" />
         <el-table-column prop="created_at" label="导入时间" width="180" />
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="200">
           <template #default="{ row }">
             <el-button
               v-if="row.has_error_report"
@@ -46,6 +46,9 @@
               @click="downloadErrors(row.id)"
             >
               错误报告
+            </el-button>
+            <el-button link type="danger" @click="handleDelete(row)">
+              删除
             </el-button>
           </template>
         </el-table-column>
@@ -56,8 +59,13 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { listImportsApi, uploadImportApi, downloadImportErrorsApi } from '@/api/imports'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  listImportsApi,
+  uploadImportApi,
+  downloadImportErrorsApi,
+  deleteImportApi,
+} from '@/api/imports'
 import { useUserStore } from '@/stores/user'
 
 const loading = ref(false)
@@ -94,6 +102,28 @@ async function handleUpload() {
     // 错误提示已由 request 拦截器弹出（含后端表头校验等原因）
   } finally {
     uploading.value = false
+  }
+}
+
+async function handleDelete(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除批次 ${row.batch_no}？将删除该批次下任务及仍归属该批次的正式库数据，且不可恢复。`,
+      '删除批次',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+      }
+    )
+    const res = await deleteImportApi(row.id)
+    ElMessage.success(
+      `已删除任务 ${res.data.deleted_tasks} 条、正式库 ${res.data.deleted_approved} 条`
+    )
+    await loadBatches()
+  } catch (e) {
+    // 用户取消或错误提示已由 request 拦截器处理
   }
 }
 

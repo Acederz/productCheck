@@ -19,3 +19,8 @@ export function getImportBatchApi(id) {
 export function downloadImportErrorsApi(id) {
   return `/api/imports/${id}/errors`
 }
+
+/** 删除导入批次及其关联任务、正式库数据 */
+export function deleteImportApi(id) {
+  return request.delete(`/imports/${id}`)
+}

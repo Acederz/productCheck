@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from flask import current_app
 from openpyxl import Workbook, load_workbook
 
 from app.constants import (
@@ -343,3 +344,87 @@ class ImportService:
         )
         db.session.commit()
         return batch
+
+    def delete_batch(self, batch_id: int, operator_id: int) -> dict:
+        """按批次硬删除任务、匹配正式库与导入记录。"""
+        from app.models.approved import ApprovedProduct, ApprovedProductHistory
+        from app.models.log import AssignmentLog, FieldChangeLog, ReviewLog
+        from app.models.task import TaskDraft
+
+        batch = ImportBatch.query.get(batch_id)
+        if not batch:
+            raise ValueError("批次不存在")
+        if batch.status == "processing":
+            raise ValueError("批次正在导入中，请稍后再试")
+
+        batch_no = batch.batch_no
+        file_path = batch.file_path
+        error_report_path = batch.error_report_path
+
+        tasks = ClassificationTask.query.filter_by(batch_id=batch_id).all()
+        task_ids = [t.id for t in tasks]
+        approved_rows = ApprovedProduct.query.filter_by(batch_id=batch_id).all()
+        approved_ids = [a.id for a in approved_rows]
+        deleted_tasks = len(task_ids)
+        deleted_approved = len(approved_ids)
+
+        try:
+            if task_ids:
+                TaskDraft.query.filter(TaskDraft.task_id.in_(task_ids)).delete(
+                    synchronize_session=False
+                )
+                FieldChangeLog.query.filter(FieldChangeLog.task_id.in_(task_ids)).delete(
+                    synchronize_session=False
+                )
+                AssignmentLog.query.filter(AssignmentLog.task_id.in_(task_ids)).delete(
+                    synchronize_session=False
+                )
+                ReviewLog.query.filter(ReviewLog.task_id.in_(task_ids)).delete(
+                    synchronize_session=False
+                )
+            if approved_ids:
+                ApprovedProductHistory.query.filter(
+                    ApprovedProductHistory.approved_product_id.in_(approved_ids)
+                ).delete(synchronize_session=False)
+                ApprovedProduct.query.filter(ApprovedProduct.id.in_(approved_ids)).delete(
+                    synchronize_session=False
+                )
+            if task_ids:
+                ClassificationTask.query.filter(
+                    ClassificationTask.id.in_(task_ids)
+                ).delete(synchronize_session=False)
+            db.session.delete(batch)
+            write_operation_log(
+                operator_id,
+                "delete_import_batch",
+                "import_batch",
+                batch_id,
+                {
+                    "batch_no": batch_no,
+                    "deleted_tasks": deleted_tasks,
+                    "deleted_approved": deleted_approved,
+                },
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            raise
+
+        # 物理文件删除失败不影响业务结果
+        for path_str in (file_path, error_report_path):
+            if not path_str:
+                continue
+            try:
+                p = Path(path_str)
+                if p.is_file():
+                    p.unlink()
+            except OSError as exc:
+                current_app.logger.warning(
+                    "删除导入文件失败 path=%s: %s", path_str, exc
+                )
+
+        return {
+            "batch_no": batch_no,
+            "deleted_tasks": deleted_tasks,
+            "deleted_approved": deleted_approved,
+        }
