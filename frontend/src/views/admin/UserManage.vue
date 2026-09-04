@@ -23,7 +23,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="创建时间" min-width="170" />
-        <el-table-column label="操作" width="200">
+        <el-table-column label="操作" width="280">
           <template #default="{ row }">
             <el-button link type="primary" @click="openResetPwd(row)">重置密码</el-button>
             <el-button
@@ -32,6 +32,14 @@
               @click="toggleActive(row)"
             >
               {{ row.is_active ? '停用' : '启用' }}
+            </el-button>
+            <el-button
+              v-if="row.role === 'operator'"
+              link
+              type="danger"
+              @click="handleDelete(row)"
+            >
+              删除
             </el-button>
           </template>
         </el-table-column>
@@ -71,8 +79,8 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { createUserApi, listUsersApi, updateUserApi } from '@/api/users'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { createUserApi, deleteUserApi, listUsersApi, updateUserApi } from '@/api/users'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -146,6 +154,22 @@ async function toggleActive(row) {
   await updateUserApi(row.id, { is_active: !row.is_active })
   ElMessage.success('状态已更新')
   await loadUsers()
+}
+
+/** 删除操作员：确认后调用接口，成功则刷新列表 */
+async function handleDelete(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除账号 ${row.username}？删除后不可恢复。`,
+      '删除确认',
+      { type: 'warning' }
+    )
+    await deleteUserApi(row.id)
+    ElMessage.success('删除成功')
+    await loadUsers()
+  } catch (e) {
+    // 用户取消或错误提示已由 request 拦截器处理
+  }
 }
 
 onMounted(loadUsers)
