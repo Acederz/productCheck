@@ -25,6 +25,7 @@ def export_tasks():
         keyword=request.args.get("keyword", "").strip() or None,
         category_large=request.args.get("category_large", "").strip() or None,
         category_segment=request.args.get("category_segment", "").strip() or None,
+        assignee_id=request.args.get("assignee_id"),
     )
 
     count = query.count()

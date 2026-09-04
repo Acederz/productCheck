@@ -1,6 +1,6 @@
 """列表查询共用的筛选条件工具。"""
 
-from sqlalchemy import or_, func
+from sqlalchemy import false, func, or_
 
 
 def parse_csv_arg(raw) -> list[str]:
@@ -45,6 +45,42 @@ def apply_batch_id_filter(query, model, batch_id=None):
     if not batch_ids:
         return query
     return query.filter(model.batch_id.in_(batch_ids))
+
+
+def apply_assignee_id_filter(query, model, assignee_id=None):
+    """按负责人 ID 筛选（支持多选）。"""
+    ids = parse_int_ids(assignee_id)
+    if not ids:
+        return query
+    return query.filter(model.assignee_id.in_(ids))
+
+
+def apply_platform_filter(query, model, platform=None):
+    """按平台筛选（支持逗号多选）。"""
+    platforms = parse_csv_arg(platform)
+    if not platforms:
+        return query
+    if len(platforms) == 1:
+        return query.filter_by(platform=platforms[0])
+    return query.filter(model.platform.in_(platforms))
+
+
+def apply_status_filter(query, model, status=None):
+    """按任务状态筛选（支持逗号多选，仅保留合法状态）。"""
+    from app.constants import TASK_STATUSES
+
+    requested = parse_csv_arg(status)
+    if not requested:
+        # 未传 status 或空字符串：不过滤
+        return query
+
+    statuses = [s for s in requested if s in TASK_STATUSES]
+    if not statuses:
+        # 传了 status 但全部非法：强制空结果，避免误返回全量
+        return query.filter(false())
+    if len(statuses) == 1:
+        return query.filter_by(status=statuses[0])
+    return query.filter(model.status.in_(statuses))
 
 
 def _json_string_literal(value: str) -> str:

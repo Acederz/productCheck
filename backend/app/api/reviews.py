@@ -8,7 +8,12 @@ from app.models.task import ClassificationTask
 from app.models.user import User
 from app.services.review_service import ReviewService
 from app.utils.auth_decorator import admin_required
-from app.utils.query_filters import apply_batch_id_filter, apply_category_filters, parse_csv_arg
+from app.utils.query_filters import (
+    apply_assignee_id_filter,
+    apply_batch_id_filter,
+    apply_category_filters,
+    parse_csv_arg,
+)
 from app.utils.response import fail, success
 
 reviews_bp = Blueprint("reviews", __name__)
@@ -57,8 +62,7 @@ def _paginate_review_list():
                 ClassificationTask.product_name.like(like),
             )
         )
-    if assignee_id.isdigit():
-        query = query.filter_by(assignee_id=int(assignee_id))
+    query = apply_assignee_id_filter(query, ClassificationTask, assignee_id)
     query = apply_batch_id_filter(query, ClassificationTask, batch_id)
     query = apply_category_filters(
         query, ClassificationTask, category_large, category_segment

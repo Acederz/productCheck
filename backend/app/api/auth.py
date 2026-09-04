@@ -10,6 +10,23 @@ from app.utils.response import fail, success
 auth_bp = Blueprint("auth", __name__)
 
 
+def _is_operator_change_password_enabled() -> bool:
+    """读取系统配置：仅当值为 'true' 时允许操作员自助改密。"""
+    from app.models.user import SystemConfig
+
+    row = SystemConfig.query.filter_by(
+        config_key="operator_change_password_enabled"
+    ).first()
+    return bool(row and row.config_value == "true")
+
+
+def _user_payload(user) -> dict:
+    """用户字典 + 改密开关标志（供 login / me）。"""
+    data = user.to_dict()
+    data["operator_change_password_enabled"] = _is_operator_change_password_enabled()
+    return data
+
+
 @auth_bp.post("/login")
 def login():
     """账号密码登录。"""
@@ -26,7 +43,7 @@ def login():
 
     token = create_access_token(identity=str(user.id))
     return success(
-        {"token": token, "user": user.to_dict()},
+        {"token": token, "user": _user_payload(user)},
         message="登录成功",
     )
 
@@ -45,7 +62,7 @@ def me():
     user = get_current_user()
     if not user:
         return fail("未登录", 401)
-    return success(user.to_dict())
+    return success(_user_payload(user))
 
 
 def _password_strength_ok(password: str) -> bool:
@@ -67,6 +84,9 @@ def change_password():
 
     if g.current_user.role != ROLE_OPERATOR:
         return fail("请使用用户管理重置密码", 403)
+
+    if not _is_operator_change_password_enabled():
+        return fail("管理员未开放修改密码", 403)
 
     data = request.get_json(silent=True) or {}
     old_password = data.get("old_password") or ""

@@ -83,6 +83,7 @@ ROLE_LABELS = {
 
 CONFIG_KEY_LABELS = {
     "operator_export_enabled": "允许操作员导出数据",
+    "operator_change_password_enabled": "允许操作员修改密码",
 }
 
 

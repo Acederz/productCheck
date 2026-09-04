@@ -69,6 +69,16 @@ def init_database(app):
                 )
             )
 
+        if not SystemConfig.query.filter_by(
+            config_key="operator_change_password_enabled"
+        ).first():
+            db.session.add(
+                SystemConfig(
+                    config_key="operator_change_password_enabled",
+                    config_value="false",
+                )
+            )
+
         db.session.commit()
         print(f"数据库初始化完成，默认管理员: {app.config['ADMIN_USERNAME']}")
 
@@ -129,6 +139,16 @@ def reset_keep_admin_and_rules(app):
             db.session.add(
                 SystemConfig(
                     config_key="operator_export_enabled",
+                    config_value="false",
+                )
+            )
+
+        if not SystemConfig.query.filter_by(
+            config_key="operator_change_password_enabled"
+        ).first():
+            db.session.add(
+                SystemConfig(
+                    config_key="operator_change_password_enabled",
                     config_value="false",
                 )
             )

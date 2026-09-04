@@ -4,7 +4,14 @@
       <span class="logo">我的分类任务</span>
       <div>
         <span class="username">{{ userStore.user?.username }}</span>
-        <el-button link type="primary" @click="openChangePwd">修改密码</el-button>
+        <el-button
+          v-if="userStore.user?.operator_change_password_enabled"
+          link
+          type="primary"
+          @click="openChangePwd"
+        >
+          修改密码
+        </el-button>
         <el-button link type="danger" @click="handleLogout">退出</el-button>
       </div>
     </el-header>
@@ -56,7 +63,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { changePasswordApi } from '@/api/auth'
@@ -88,6 +95,10 @@ function resetChangePwdForm() {
   changePwdForm.new_password = ''
   changePwdForm.confirm_password = ''
 }
+
+onMounted(() => {
+  userStore.fetchMe().catch(() => {})
+})
 
 async function handleLogout() {
   await userStore.logout()

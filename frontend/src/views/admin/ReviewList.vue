@@ -58,6 +58,26 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="操作员">
+          <el-select
+            v-model="selectedOperatorIds"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            clearable
+            placeholder="全部"
+            style="width: 180px"
+            :loading="operatorLoading"
+          >
+            <el-option
+              v-for="o in operatorOptions"
+              :key="o.id"
+              :label="o.username"
+              :value="o.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="大类">
           <el-select
             v-model="categoryFilters.category_large"
@@ -309,6 +329,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { approveReviewsApi, listPendingReviewsApi, rejectReviewsApi } from '@/api/reviews'
+import { listUsersApi } from '@/api/users'
 import {
   resolveFilterValues,
   useCategoryQueryFilters,
@@ -347,6 +368,11 @@ const filters = reactive({
   platform: [],
   keyword: '',
 })
+
+/** 启用中的操作员选项（role=operator 且 is_active） */
+const operatorOptions = ref([])
+const selectedOperatorIds = ref([])
+const operatorLoading = ref(false)
 
 const showRejectDialog = ref(false)
 const rejectReason = ref('')
@@ -508,6 +534,9 @@ function buildQueryParams() {
     page_size: pageSize.value,
     platform: resolveFilterValues(filters.platform, platformOptions),
     keyword: filters.keyword?.trim() || undefined,
+    assignee_id: selectedOperatorIds.value.length
+      ? selectedOperatorIds.value.join(',')
+      : undefined,
     ...categoryQueryParams(),
   })
 }
@@ -520,10 +549,27 @@ function handleSearch() {
 async function handleReset() {
   filters.platform = []
   filters.keyword = ''
+  selectedOperatorIds.value = []
   resetBatchFilters()
   await resetCategoryFiltersAndOptions()
   page.value = 1
   loadList()
+}
+
+/** 加载启用操作员列表，供筛选下拉使用（失败不阻塞主列表） */
+async function loadOperatorOptions() {
+  operatorLoading.value = true
+  try {
+    const res = await listUsersApi()
+    operatorOptions.value = (res.data || [])
+      .filter((u) => u.role === 'operator' && u.is_active)
+      .map((u) => ({ id: u.id, username: u.username }))
+  } catch (err) {
+    console.error('加载操作员选项失败', err)
+    operatorOptions.value = []
+  } finally {
+    operatorLoading.value = false
+  }
 }
 
 function handlePageSizeChange() {
@@ -592,8 +638,9 @@ async function handleRejectConfirm() {
 }
 
 onMounted(async () => {
-  await loadBatchOptions()
-  await initCategoryFilterOptions()
+  // 操作员选项单独 catch，避免 Promise.all 失败导致主列表不加载
+  const operatorPromise = loadOperatorOptions()
+  await Promise.all([loadBatchOptions(), initCategoryFilterOptions(), operatorPromise])
   await loadList()
 })
 onUnmounted(stopDescDrag)

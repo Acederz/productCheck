@@ -13,7 +13,7 @@ from app import create_app
 from app.constants import ROLE_ADMIN, ROLE_OPERATOR
 from app.extensions import db
 from app.models.log import OperationLog
-from app.models.user import User
+from app.models.user import SystemConfig, User
 
 
 class ChangePasswordTests(unittest.TestCase):
@@ -49,6 +49,19 @@ class ChangePasswordTests(unittest.TestCase):
         db.session.add(op)
         db.session.commit()
         self.op_id = op.id
+        # 产品默认禁止操作员自助改密
+        self._set_change_pwd_enabled(False)
+
+    def _set_change_pwd_enabled(self, enabled: bool):
+        """设置操作员改密开关（测试辅助）。"""
+        key = "operator_change_password_enabled"
+        row = SystemConfig.query.filter_by(config_key=key).first()
+        if not row:
+            row = SystemConfig(config_key=key, config_value="true" if enabled else "false")
+            db.session.add(row)
+        else:
+            row.config_value = "true" if enabled else "false"
+        db.session.commit()
 
     def _op_headers(self):
         token = create_access_token(identity=str(self.op_id))
@@ -68,6 +81,7 @@ class ChangePasswordTests(unittest.TestCase):
         )
 
     def test_operator_success(self):
+        self._set_change_pwd_enabled(True)
         resp = self._post(
             self._op_headers(),
             {
@@ -88,6 +102,7 @@ class ChangePasswordTests(unittest.TestCase):
         self.assertIsNotNone(log)
 
     def test_wrong_old_password(self):
+        self._set_change_pwd_enabled(True)
         resp = self._post(
             self._op_headers(),
             {
@@ -103,6 +118,7 @@ class ChangePasswordTests(unittest.TestCase):
         self.assertTrue(op.check_password(self._OLD))
 
     def test_confirm_mismatch(self):
+        self._set_change_pwd_enabled(True)
         resp = self._post(
             self._op_headers(),
             {
@@ -115,6 +131,7 @@ class ChangePasswordTests(unittest.TestCase):
         self.assertIn("不一致", json.loads(resp.data)["message"])
 
     def test_weak_password(self):
+        self._set_change_pwd_enabled(True)
         resp = self._post(
             self._op_headers(),
             {
@@ -127,6 +144,7 @@ class ChangePasswordTests(unittest.TestCase):
         self.assertIn("8", json.loads(resp.data)["message"])
 
     def test_same_as_old(self):
+        self._set_change_pwd_enabled(True)
         resp = self._post(
             self._op_headers(),
             {
@@ -149,6 +167,36 @@ class ChangePasswordTests(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 403)
         self.assertIn("用户管理", json.loads(resp.data)["message"])
+
+    def test_disabled_returns_403(self):
+        self._set_change_pwd_enabled(False)
+        resp = self._post(
+            self._op_headers(),
+            {
+                "old_password": self._OLD,
+                "new_password": self._NEW,
+                "confirm_password": self._NEW,
+            },
+        )
+        self.assertEqual(resp.status_code, 403)
+        body = json.loads(resp.data)
+        self.assertIn("未开放", body.get("message", ""))
+        op = User.query.get(self.op_id)
+        self.assertTrue(op.check_password(self._OLD))
+
+    def test_me_includes_flag_false(self):
+        self._set_change_pwd_enabled(False)
+        resp = self.client.get("/api/auth/me", headers=self._op_headers())
+        self.assertEqual(resp.status_code, 200)
+        body = json.loads(resp.data)
+        self.assertFalse(body["data"]["operator_change_password_enabled"])
+
+    def test_me_includes_flag_true(self):
+        self._set_change_pwd_enabled(True)
+        resp = self.client.get("/api/auth/me", headers=self._op_headers())
+        self.assertEqual(resp.status_code, 200)
+        body = json.loads(resp.data)
+        self.assertTrue(body["data"]["operator_change_password_enabled"])
 
 
 if __name__ == "__main__":

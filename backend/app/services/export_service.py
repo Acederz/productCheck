@@ -176,15 +176,21 @@ class ExportService:
         keyword=None,
         category_large=None,
         category_segment=None,
+        assignee_id=None,
     ):
         """构建任务导出查询。"""
-        from app.utils.query_filters import apply_batch_id_filter, apply_category_filters
+        from app.utils.query_filters import (
+            apply_assignee_id_filter,
+            apply_batch_id_filter,
+            apply_category_filters,
+            apply_platform_filter,
+            apply_status_filter,
+        )
 
         query = ClassificationTask.query
-        if status:
-            query = query.filter_by(status=status)
-        if platform:
-            query = query.filter_by(platform=platform)
+        query = apply_status_filter(query, ClassificationTask, status)
+        query = apply_platform_filter(query, ClassificationTask, platform)
+        query = apply_assignee_id_filter(query, ClassificationTask, assignee_id)
         query = apply_batch_id_filter(query, ClassificationTask, batch_id)
         if keyword:
             like = f"%{keyword}%"
@@ -207,15 +213,14 @@ class ExportService:
         batch_id=None,
     ):
         """构建正式库导出查询。"""
-        from app.utils.query_filters import apply_batch_id_filter, apply_category_filters
+        from app.utils.query_filters import (
+            apply_batch_id_filter,
+            apply_category_filters,
+            apply_platform_filter,
+        )
 
         query = ApprovedProduct.query
-        if platform:
-            platforms = [p.strip() for p in str(platform).split(",") if p.strip()]
-            if len(platforms) == 1:
-                query = query.filter_by(platform=platforms[0])
-            elif platforms:
-                query = query.filter(ApprovedProduct.platform.in_(platforms))
+        query = apply_platform_filter(query, ApprovedProduct, platform)
         if keyword:
             like = f"%{keyword}%"
             query = query.filter(
