@@ -15,6 +15,7 @@ from app.models.log import (
     AssignmentLog,
     ReviewLog,
 )
+from app.models.skip_field_rule import SkipFieldRule, SkipFieldRuleVersion
 
 __all__ = [
     "User",
@@ -32,4 +33,6 @@ __all__ = [
     "FieldChangeLog",
     "AssignmentLog",
     "ReviewLog",
+    "SkipFieldRuleVersion",
+    "SkipFieldRule",
 ]

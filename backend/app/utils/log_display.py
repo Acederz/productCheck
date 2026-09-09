@@ -11,6 +11,7 @@ from app.models.user import User
 ACTION_LABELS = {
     "import_excel": "导入商品数据",
     "import_rules": "导入分类规则",
+    "import_skip_field_rules": "导入无需填写字段规则",
     "assign_tasks": "分配任务",
     "withdraw_tasks": "撤回任务",
     "submit_tasks": "提交审核",
@@ -31,6 +32,7 @@ TARGET_TYPE_LABELS = {
     "user": "用户",
     "import_batch": "导入批次",
     "rule_version": "规则版本",
+    "skip_field_rule_version": "无需填写规则版本",
     "system_config": "系统配置",
     "export": "导出文件",
     "approved_product": "正式数据",
@@ -47,6 +49,7 @@ DETAIL_KEY_LABELS = {
     "version_no": "版本号",
     "nodes": "规则行数",
     "field_rules": "补充规则行数",
+    "rule_count": "规则行数",
     "count": "导出条数",
     "filters": "筛选条件",
     "key": "配置项",

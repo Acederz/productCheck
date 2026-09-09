@@ -188,7 +188,7 @@
                   no-data-text="请填写"
                   no-match-text="请填写"
                   filterable
-                  :disabled="row.is_operating === '否'"
+                  :disabled="fieldDisabled(row, 'category_large')"
                   @visible-change="(v) => v && onDropdownVisible(row, 'category_large')"
                   @change="() => handleCascadeChange(row, 'category_large')"
                 >
@@ -210,7 +210,7 @@
                   no-data-text="请填写"
                   no-match-text="请填写"
                   filterable
-                  :disabled="row.is_operating === '否'"
+                  :disabled="fieldDisabled(row, 'category_segment')"
                   @visible-change="(v) => v && onDropdownVisible(row, 'category_segment')"
                   @change="() => handleCascadeChange(row, 'category_segment')"
                 >
@@ -237,7 +237,7 @@
                   no-data-text="请填写"
                   no-match-text="请填写"
                   filterable
-                  :disabled="row.is_operating === '否'"
+                  :disabled="fieldDisabled(row, 'category_type')"
                   @visible-change="(v) => v && onDropdownVisible(row, 'category_type')"
                   @change="() => handleCascadeChange(row, 'category_type')"
                 >
@@ -259,7 +259,7 @@
                   no-data-text="请填写"
                   no-match-text="请填写"
                   filterable
-                  :disabled="row.is_operating === '否'"
+                  :disabled="fieldDisabled(row, 'material_main')"
                   @visible-change="(v) => v && onDropdownVisible(row, 'material_main')"
                   @change="() => handleCascadeChange(row, 'material_main')"
                 >
@@ -289,7 +289,7 @@
                     size="small"
                     no-data-text="请填写"
                     no-match-text="请填写"
-                    :disabled="row.is_operating === '否'"
+                    :disabled="fieldDisabled(row, 'material_aux')"
                     @visible-change="(v) => v && onDropdownVisible(row, 'material_aux')"
                     @change="() => handleCascadeChange(row, 'material_aux')"
                   >
@@ -320,7 +320,7 @@
                     size="small"
                     no-data-text="请填写"
                     no-match-text="请填写"
-                    :disabled="row.is_operating === '否'"
+                    :disabled="fieldDisabled(row, 'packaging')"
                     @visible-change="(v) => v && onDropdownVisible(row, 'packaging')"
                     @change="() => handleCascadeChange(row, 'packaging')"
                   >
@@ -351,7 +351,7 @@
                     size="small"
                     no-data-text="请填写"
                     no-match-text="请填写"
-                    :disabled="row.is_operating === '否'"
+                    :disabled="fieldDisabled(row, 'size')"
                     @visible-change="(v) => v && onDropdownVisible(row, 'size')"
                     @change="() => handleCascadeChange(row, 'size')"
                   >
@@ -382,7 +382,7 @@
                     size="small"
                     no-data-text="请填写"
                     no-match-text="请填写"
-                    :disabled="row.is_operating === '否'"
+                    :disabled="fieldDisabled(row, 'roll_count')"
                     @visible-change="(v) => v && onDropdownVisible(row, 'roll_count')"
                     @change="() => scheduleDraft(row)"
                   >
@@ -413,7 +413,7 @@
                     size="small"
                     no-data-text="请填写"
                     no-match-text="请填写"
-                    :disabled="row.is_operating === '否'"
+                    :disabled="fieldDisabled(row, 'total_count')"
                     @visible-change="(v) => v && onDropdownVisible(row, 'total_count')"
                     @change="() => scheduleDraft(row)"
                   >
@@ -532,6 +532,10 @@ import {
   clearPathOptionsCache,
   mergeSelectOptions,
   hintOrTypePlaceholder,
+  fetchDisabledFields,
+  applyDisabledFields,
+  clearDisabledFieldValues,
+  isFieldDisabled,
 } from '@/composables/useClassificationCascade'
 import {
   resolveFilterValues,
@@ -677,6 +681,23 @@ function getRowState(taskId) {
   return rowStates[taskId]
 }
 
+/** 是否经营=否 或 该字段在大类禁用列表中 */
+function fieldDisabled(row, field) {
+  if (row.is_operating === '否') return true
+  return isFieldDisabled(getRowState(row.id).disabledFields, field)
+}
+
+/** 按当前大类拉取禁用字段并应用到行 */
+async function refreshDisabledFields(row) {
+  const state = getRowState(row.id)
+  if (row.is_operating === '否' || !row.category_large) {
+    state.disabledFields = []
+    return
+  }
+  const disabled = await fetchDisabledFields(row.category_large)
+  applyDisabledFields(row, disabled, state)
+}
+
 function normalizeDescImages(descImages) {
   // 数据可能是 JSON 数组，也可能是旧数据字符串（JSON 或逗号分隔）。
   if (Array.isArray(descImages)) {
@@ -805,6 +826,8 @@ function formatProductAttr(val) {
 }
 
 function pickEditable(row) {
+  const state = getRowState(row.id)
+  clearDisabledFieldValues(row, state.disabledFields || [])
   const data = {
     is_operating: row.is_operating || '',
     // 大类单选，直接存字符串
@@ -832,11 +855,17 @@ async function onDropdownVisible(row, fieldKey) {
 
 async function handleCascadeChange(row, fieldKey) {
   await onRowCascadeChange(row, getRowState(row.id), fieldKey)
+  if (fieldKey === 'category_large') {
+    await refreshDisabledFields(row)
+  }
   scheduleDraft(row)
 }
 
 async function handleOperatingChange(row) {
   await onRowOperatingChange(row, getRowState(row.id))
+  if (row.is_operating === '是') {
+    await refreshDisabledFields(row)
+  }
   scheduleDraft(row)
 }
 
@@ -917,6 +946,9 @@ async function loadTasks() {
     // A：不再为每行预拉全部下级选项，仅规范化字段；展开下拉时再请求
     for (const row of items) {
       await initRowCascade(row, getRowState(row.id))
+      if (row.is_operating !== '否' && row.category_large) {
+        await refreshDisabledFields(row)
+      }
     }
     await loadTaskStats()
   } finally {
@@ -943,6 +975,11 @@ async function handleSubmitRow(row) {
 }
 
 async function handleBatchSubmit() {
+  // 与单条提交一致：先落库（含清空禁用字段），再批量提交，避免界面已空但库中仍有旧值
+  const selectedRows = tasks.value.filter((r) => selectedIds.value.includes(r.id))
+  for (const row of selectedRows) {
+    await updateTaskApi(row.id, pickEditable(row))
+  }
   const res = await submitTasksApi(selectedIds.value)
   const ok = res.data.success_ids?.length || 0
   const skip = res.data.skipped?.length || 0

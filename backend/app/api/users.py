@@ -127,6 +127,11 @@ def delete_user(user_id: int):
         ClassificationRuleVersion.query.filter_by(created_by=user_id).update(
             {ClassificationRuleVersion.created_by: None}, synchronize_session=False
         )
+        from app.models.skip_field_rule import SkipFieldRuleVersion
+
+        SkipFieldRuleVersion.query.filter_by(created_by=user_id).update(
+            {SkipFieldRuleVersion.created_by: None}, synchronize_session=False
+        )
         ClassificationRuleChangeLog.query.filter_by(operator_id=user_id).update(
             {ClassificationRuleChangeLog.operator_id: None}, synchronize_session=False
         )

@@ -14,6 +14,7 @@
           clearable
           placeholder="请选择（单选）"
           filterable
+          :disabled="fieldDisabled('category_large')"
           @change="() => onCascadeChange('category_large')"
         >
           <el-option v-for="o in options.large" :key="o" :label="o" :value="o" />
@@ -28,6 +29,7 @@
           collapse-tags-tooltip
           placeholder="可多选"
           filterable
+          :disabled="fieldDisabled('category_segment')"
           @change="() => onCascadeChange('category_segment')"
         >
           <el-option v-for="o in options.segment" :key="o" :label="o" :value="o" />
@@ -42,6 +44,7 @@
           collapse-tags-tooltip
           placeholder="请选择"
           filterable
+          :disabled="fieldDisabled('category_type')"
           @change="() => onCascadeChange('category_type')"
         >
           <el-option v-for="o in options.type" :key="o" :label="o" :value="o" />
@@ -56,6 +59,7 @@
           collapse-tags-tooltip
           placeholder="请选择"
           filterable
+          :disabled="fieldDisabled('material_main')"
           @change="() => onCascadeChange('material_main')"
         >
           <el-option v-for="o in options.materialMain" :key="o" :label="o" :value="o" />
@@ -73,6 +77,7 @@
             allow-create
             default-first-option
             :placeholder="hintOrTypePlaceholder(meta.materialAux.hint)"
+            :disabled="fieldDisabled('material_aux')"
             @change="() => onCascadeChange('material_aux')"
           >
             <el-option
@@ -96,6 +101,7 @@
             allow-create
             default-first-option
             :placeholder="hintOrTypePlaceholder(meta.packaging.hint)"
+            :disabled="fieldDisabled('packaging')"
             @change="() => onCascadeChange('packaging')"
           >
             <el-option
@@ -119,6 +125,7 @@
             allow-create
             default-first-option
             :placeholder="hintOrTypePlaceholder(meta.size.hint)"
+            :disabled="fieldDisabled('size')"
             @change="() => onCascadeChange('size')"
           >
             <el-option
@@ -142,6 +149,7 @@
             allow-create
             default-first-option
             :placeholder="hintOrTypePlaceholder(meta.roll.hint)"
+            :disabled="fieldDisabled('roll_count')"
           >
             <el-option
               v-for="o in mergeSelectOptions(options.roll, form.roll_count, 'roll_count')"
@@ -164,6 +172,7 @@
             allow-create
             default-first-option
             :placeholder="hintOrTypePlaceholder(meta.total.hint)"
+            :disabled="fieldDisabled('total_count')"
           >
             <el-option
               v-for="o in mergeSelectOptions(options.total, form.total_count, 'total_count')"
@@ -188,6 +197,9 @@ import {
   normalizeSingleLarge,
   mergeSelectOptions,
   hintOrTypePlaceholder,
+  fetchDisabledFields,
+  clearDisabledFieldValues,
+  isFieldDisabled,
 } from '@/composables/useClassificationCascade'
 import FieldHintTooltip from '@/components/FieldHintTooltip.vue'
 
@@ -218,6 +230,23 @@ const meta = reactive({
   roll: { mode: 'text', hint: '' },
   total: { mode: 'text', hint: '' },
 })
+
+/** 当前大类下无需填写的字段（英文名） */
+const disabledFields = reactive([])
+
+function fieldDisabled(field) {
+  return isFieldDisabled(disabledFields, field)
+}
+
+async function refreshDisabledFields() {
+  if (form.is_operating === '否' || !form.category_large) {
+    disabledFields.splice(0, disabledFields.length)
+    return
+  }
+  const list = await fetchDisabledFields(form.category_large)
+  disabledFields.splice(0, disabledFields.length, ...list)
+  clearDisabledFieldValues(form, list)
+}
 
 const cascadeOrder = [
   'category_large',
@@ -277,6 +306,7 @@ function hasFieldValue(fieldKey) {
 }
 
 async function loadOptions(fieldKey) {
+  if (fieldDisabled(fieldKey)) return
   const apiField = fieldApiMap[fieldKey]
   if (!apiField) return
   const res = await getRuleOptionsApi(apiField, buildPath())
@@ -297,10 +327,11 @@ async function loadOptions(fieldKey) {
 const tailFieldMap = { size: 'size', roll: 'roll_count', total: 'total_count' }
 
 async function loadFieldMeta(fieldName, targetKey, optionKey) {
+  const rowField = tailFieldMap[targetKey]
+  if (rowField && fieldDisabled(rowField)) return
   const res = await getFieldMetaApi(fieldName, buildPath())
   meta[targetKey].mode = 'select'
   meta[targetKey].hint = res.data.hint || ''
-  const rowField = tailFieldMap[targetKey]
   if (rowField) {
     form[rowField] = normalizeMultiField(form[rowField], rowField)
   }
@@ -333,6 +364,9 @@ function clearDownstream(fromField) {
 
 async function onCascadeChange(fieldKey) {
   clearDownstream(fieldKey)
+  if (fieldKey === 'category_large') {
+    await refreshDisabledFields()
+  }
   const idx = cascadeOrder.indexOf(fieldKey)
   const toLoad = cascadeOrder.slice(idx + 1)
   for (const key of toLoad) {
@@ -348,6 +382,7 @@ function onOperatingChange() {
     MULTI_SELECT_FIELDS.forEach((k) => {
       form[k] = []
     })
+    disabledFields.splice(0, disabledFields.length)
   } else {
     initOptions()
   }
@@ -363,6 +398,7 @@ async function initOptions() {
   normalizeRowFields(form)
   await loadOptions('category_large')
   if (hasFieldValue('category_large')) {
+    await refreshDisabledFields()
     for (const key of cascadeOrder.slice(1)) {
       if (fieldApiMap[key] && (hasFieldValue(key) || key === 'category_segment')) {
         await loadOptions(key)

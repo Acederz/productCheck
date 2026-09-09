@@ -7,6 +7,7 @@
  */
 import { reactive } from 'vue'
 import { getFieldMetaApi, getRuleOptionsApi, getRuleVersionApi } from '@/api/rules'
+import { getDisabledFieldsApi, getSkipFieldRuleVersionApi } from '@/api/skipFieldRules'
 
 const CASCADE_ORDER = [
   'category_large',
@@ -88,6 +89,10 @@ export const globalLargeOptions = reactive({ list: [], versionId: null })
 
 /** 前端已知的最新规则版本 id */
 let knownRuleVersionId = null
+
+/** 无需填写字段规则版本与缓存（key = skipVersionId|大类 → 英文字段名[]） */
+let knownSkipVersionId = null
+const disabledFieldsCache = new Map()
 
 /**
  * 规则选项/元数据缓存。
@@ -202,8 +207,75 @@ export function clearRowOptionCache(state) {
   })
 }
 
+/**
+ * 同步无需填写字段规则版本；版本变化时清空禁用字段缓存。
+ * @returns {Promise<number|string|null>}
+ */
+export async function syncSkipFieldVersion() {
+  try {
+    const res = await getSkipFieldRuleVersionApi()
+    const id = res.data?.id ?? null
+    if (id !== knownSkipVersionId) {
+      knownSkipVersionId = id
+      disabledFieldsCache.clear()
+    }
+    return knownSkipVersionId
+  } catch (e) {
+    return knownSkipVersionId
+  }
+}
+
+/**
+ * 按大类拉取禁用字段英文名列表（带版本级缓存）。
+ * @param {string|string[]|*} categoryLarge
+ * @returns {Promise<string[]>}
+ */
+export async function fetchDisabledFields(categoryLarge) {
+  const large = normalizeSingleLarge(categoryLarge)
+  if (!large) return []
+  await syncSkipFieldVersion()
+  const key = `${knownSkipVersionId}|${large}`
+  if (disabledFieldsCache.has(key)) return disabledFieldsCache.get(key)
+  try {
+    const res = await getDisabledFieldsApi(large)
+    const fields = res.data?.fields || res.data || []
+    const list = Array.isArray(fields) ? fields : []
+    disabledFieldsCache.set(key, list)
+    return list
+  } catch (e) {
+    return []
+  }
+}
+
+/** 清空行内被禁用的字段值（多选→[]，单选→''） */
+export function clearDisabledFieldValues(row, disabledList) {
+  if (!row || !Array.isArray(disabledList)) return
+  for (const f of disabledList) {
+    if (MULTI_SELECT_FIELDS.includes(f)) row[f] = []
+    else row[f] = ''
+  }
+}
+
+/**
+ * 应用禁用列表：写入行状态并清空对应字段值。
+ * @param {object} row
+ * @param {string[]} disabledEnList
+ * @param {object} state 行级 cascade 状态（含 disabledFields）
+ */
+export function applyDisabledFields(row, disabledEnList, state) {
+  const list = Array.isArray(disabledEnList) ? [...disabledEnList] : []
+  if (state) state.disabledFields = list
+  clearDisabledFieldValues(row, list)
+}
+
+/** 判断字段是否在禁用列表中 */
+export function isFieldDisabled(disabledFields, field) {
+  return Array.isArray(disabledFields) && disabledFields.includes(field)
+}
+
 export function createRowCascadeState() {
   return reactive({
+    disabledFields: [],
     options: {
       segment: [],
       type: [],
@@ -381,6 +453,7 @@ export async function onRowOperatingChange(row, state) {
       row[k] = []
     })
     clearRowOptionCache(state)
+    if (state) state.disabledFields = []
   } else {
     await initRowCascade(row, state)
   }
@@ -401,6 +474,7 @@ export async function ensureTailOptions(row, state, fieldKey = 'size') {
  * 下拉展开时加载该字段选项（优先走缓存）。
  */
 export async function onDropdownVisible(row, state, fieldKey) {
+  if (isFieldDisabled(state?.disabledFields, fieldKey)) return
   if (fieldKey === 'category_large') {
     await loadGlobalLargeOptions(false)
     return

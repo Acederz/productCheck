@@ -101,6 +101,28 @@ class TaskService:
             return parts[0] if parts else None
         return text
 
+    def _field_has_value(self, value) -> bool:
+        """判断字段是否含非空有效值。"""
+        if value is None:
+            return False
+        if isinstance(value, list):
+            return any(str(v).strip() for v in value)
+        return bool(str(value).strip())
+
+    def _assert_no_disabled_field_values(self, category_large: str | None, data: dict) -> None:
+        """禁用字段不得带非空值（不静默清空）。"""
+        from app.services.skip_field_rule_service import (
+            SKIP_FIELD_EN_TO_CN,
+            SkipFieldRuleService,
+        )
+
+        large = self._normalize_category_large(category_large) if category_large else None
+        disabled = SkipFieldRuleService().get_disabled_fields(large or "")
+        for en in disabled:
+            if en in data and self._field_has_value(data.get(en)):
+                cn = SKIP_FIELD_EN_TO_CN.get(en, en)
+                raise ValueError(f"{cn}无需填写")
+
     def _apply_editable_fields(self, task: ClassificationTask, data: dict) -> list:
         """应用可编辑字段，返回变更列表 [(field, old, new)]。"""
         changes = []
@@ -204,6 +226,9 @@ class TaskService:
         if not self.can_edit(task, user):
             raise ValueError("当前状态不允许编辑")
 
+        category_large = data.get("category_large", task.category_large)
+        self._assert_no_disabled_field_values(category_large, data)
+
         changes = self._apply_editable_fields(task, data)
         task.updated_at = datetime.utcnow()
 
@@ -232,6 +257,9 @@ class TaskService:
         if task.status not in (TASK_STATUS_PENDING, TASK_STATUS_REJECTED):
             raise ValueError("当前状态不可暂存")
 
+        category_large = draft_json.get("category_large") or task.category_large
+        self._assert_no_disabled_field_values(category_large, draft_json)
+
         draft = TaskDraft.query.filter_by(task_id=task_id, assignee_id=assignee_id).first()
         if not draft:
             draft = TaskDraft(task_id=task_id, assignee_id=assignee_id, draft_json=draft_json)
@@ -256,17 +284,34 @@ class TaskService:
 
     def _validate_for_submit(self, task: ClassificationTask) -> str | None:
         """提交前校验分类填写。"""
+        from app.services.skip_field_rule_service import SkipFieldRuleService
+
         operating = (task.is_operating or "").strip()
         if operating == "否":
             return None
         if operating != "是":
             return "请先选择「是否经营」"
 
+        payload = {field: getattr(task, field) for field in EDITABLE_FIELDS}
+        try:
+            self._assert_no_disabled_field_values(task.category_large, payload)
+        except ValueError as exc:
+            return str(exc)
+
+        large = (
+            self._normalize_category_large(task.category_large)
+            if task.category_large
+            else None
+        )
+        disabled = set(SkipFieldRuleService().get_disabled_fields(large or ""))
+
         required = [
             ("category_large", "大类"),
             ("category_type", "类别"),
         ]
         for field, label in required:
+            if field in disabled:
+                continue
             if not getattr(task, field):
                 return f"请填写{label}"
 
