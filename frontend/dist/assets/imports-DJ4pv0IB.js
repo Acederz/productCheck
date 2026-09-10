@@ -1,1 +1,0 @@
-import{z as r}from"./index-D3TdHBqh.js";function p(t){return r.get("/imports",{params:t})}function n(t){const e=new FormData;return e.append("file",t),r.post("/imports",e,{headers:{"Content-Type":"multipart/form-data"}})}function i(t){return r.delete(`/imports/${t}`)}export{i as d,p as l,n as u};
