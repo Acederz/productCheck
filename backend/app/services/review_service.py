@@ -10,6 +10,9 @@ from app.models.task import ClassificationTask
 from app.services.operation_log_service import write_operation_log
 
 
+APPROVE_SCOPE_BATCH_SIZE = 100
+
+
 class ReviewService:
     """审核业务逻辑。"""
 
@@ -114,6 +117,47 @@ class ReviewService:
         write_operation_log(admin_id, "approve_tasks", "task", None, {"task_ids": success})
         db.session.commit()
         return {"success_ids": success, "skipped": skipped}
+
+    def approve_by_scope(
+        self,
+        task_ids: list,
+        admin_id: int,
+        *,
+        scope: str,
+        filters: dict | None = None,
+    ) -> dict:
+        """先收集匹配待审核 ID 后，按批调用 approve_tasks 完成范围通过。"""
+        total_matched = len(task_ids)
+        success_count = 0
+        skipped_count = 0
+
+        for i in range(0, total_matched, APPROVE_SCOPE_BATCH_SIZE):
+            batch = task_ids[i : i + APPROVE_SCOPE_BATCH_SIZE]
+            if not batch:
+                continue
+            result = self.approve_tasks(batch, admin_id)
+            success_count += len(result["success_ids"])
+            skipped_count += len(result["skipped"])
+
+        write_operation_log(
+            admin_id,
+            "approve_tasks_scope",
+            "task",
+            None,
+            {
+                "scope": scope,
+                "success_count": success_count,
+                "skipped_count": skipped_count,
+                "filters": filters or {},
+            },
+        )
+        db.session.commit()
+
+        return {
+            "success_count": success_count,
+            "skipped_count": skipped_count,
+            "total_matched": total_matched,
+        }
 
     def reject_tasks(self, task_ids: list, admin_id: int, reason: str = "") -> dict:
         """批量驳回。"""

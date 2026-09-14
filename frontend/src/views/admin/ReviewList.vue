@@ -4,7 +4,23 @@
       <template #header>
         <div class="card-header">
           <span>审核中心</span>
-          <div>
+          <div class="header-actions">
+            <el-button
+              type="success"
+              plain
+              :loading="scopeApproving"
+              @click="handleApproveScope('all')"
+            >
+              全部审核通过
+            </el-button>
+            <el-button
+              type="success"
+              plain
+              :loading="scopeApproving"
+              @click="handleApproveScope('filtered')"
+            >
+              按当前条件审核通过
+            </el-button>
             <el-button
               type="success"
               :disabled="!selectedIds.length"
@@ -328,7 +344,13 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { approveReviewsApi, listPendingReviewsApi, rejectReviewsApi } from '@/api/reviews'
+import {
+  approveReviewsApi,
+  approveScopeApi,
+  approveScopeCountApi,
+  listPendingReviewsApi,
+  rejectReviewsApi,
+} from '@/api/reviews'
 import { listUsersApi } from '@/api/users'
 import {
   resolveFilterValues,
@@ -357,6 +379,8 @@ const {
 
 const loading = ref(false)
 const rejecting = ref(false)
+/** 范围审核（全部/按条件）提交中，两按钮共用 loading */
+const scopeApproving = ref(false)
 const tableData = ref([])
 const selectedIds = ref([])
 const page = ref(1)
@@ -528,10 +552,9 @@ function onSelectionChange(rows) {
   selectedIds.value = rows.map((r) => r.id)
 }
 
-function buildQueryParams() {
+/** 与列表筛选一致的条件（不含分页），供范围审核 count/POST 使用 */
+function buildScopeFilters() {
   return withBatchParams({
-    page: page.value,
-    page_size: pageSize.value,
     platform: resolveFilterValues(filters.platform, platformOptions),
     keyword: filters.keyword?.trim() || undefined,
     assignee_id: selectedOperatorIds.value.length
@@ -539,6 +562,14 @@ function buildQueryParams() {
       : undefined,
     ...categoryQueryParams(),
   })
+}
+
+function buildQueryParams() {
+  return {
+    page: page.value,
+    page_size: pageSize.value,
+    ...buildScopeFilters(),
+  }
 }
 
 function handleSearch() {
@@ -613,6 +644,42 @@ async function handleBatchApprove() {
   await loadList()
 }
 
+/** 全部 / 按当前筛选条件批量审核通过 */
+async function handleApproveScope(scope) {
+  const filters = buildScopeFilters()
+  const countParams =
+    scope === 'all' ? { scope: 'all' } : { scope: 'filtered', ...filters }
+  const countRes = await approveScopeCountApi(countParams)
+  const n = countRes.data?.count ?? 0
+  if (n === 0) {
+    ElMessage.info('当前没有待审核数据')
+    return
+  }
+  const tip =
+    scope === 'all'
+      ? `将审核通过全部待审核数据共 ${n} 条，且不受当前筛选影响。是否继续？`
+      : `将按当前查询条件审核通过 ${n} 条。是否继续？`
+  try {
+    await ElMessageBox.confirm(tip, '确认审核通过', { type: 'warning' })
+  } catch (e) {
+    // 用户点取消，不当作错误
+    if (e === 'cancel' || e === 'close') return
+    throw e
+  }
+  scopeApproving.value = true
+  try {
+    const res = await approveScopeApi({
+      scope,
+      filters: scope === 'filtered' ? filters : undefined,
+    })
+    ElMessage.success(res.message || `已通过 ${res.data.success_count} 条`)
+    selectedIds.value = []
+    await loadList()
+  } finally {
+    scopeApproving.value = false
+  }
+}
+
 function openRejectDialog(ids) {
   rejectTargetIds.value = [...ids]
   rejectReason.value = ''
@@ -651,6 +718,12 @@ onUnmounted(stopDescDrag)
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 .filter-form {
   margin-bottom: 12px;
