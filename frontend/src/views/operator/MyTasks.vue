@@ -108,6 +108,7 @@
         <el-table
           ref="tableRef"
           :data="tableData"
+          row-key="id"
           v-loading="loading"
           border
           stripe
@@ -975,13 +976,19 @@ async function handleSubmitRow(row) {
 }
 
 async function handleBatchSubmit() {
-  // 与单条提交一致：先落库（含清空禁用字段），再批量提交，避免界面已空但库中仍有旧值
-  const selectedRows = tableData.value.filter((r) => selectedIds.value.includes(r.id))
+  // 先固定勾选 ID：更新行数据可能触发 selection-change 清空 selectedIds
+  const ids = selectedIds.value.filter((id) => id != null)
+  if (!ids.length) {
+    ElMessage.warning('请选择要提交的任务')
+    return
+  }
+  const idSet = new Set(ids.map((id) => Number(id)))
+  const selectedRows = tableData.value.filter((r) => idSet.has(Number(r.id)))
   try {
     for (const row of selectedRows) {
       await updateTaskApi(row.id, pickEditable(row))
     }
-    const res = await submitTasksApi(selectedIds.value)
+    const res = await submitTasksApi(ids)
     const ok = res.data.success_ids?.length || 0
     const skip = res.data.skipped?.length || 0
     ElMessage.success(`提交完成：成功 ${ok} 条，跳过 ${skip} 条`)
