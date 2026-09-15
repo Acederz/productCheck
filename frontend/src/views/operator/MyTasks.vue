@@ -976,15 +976,20 @@ async function handleSubmitRow(row) {
 
 async function handleBatchSubmit() {
   // 与单条提交一致：先落库（含清空禁用字段），再批量提交，避免界面已空但库中仍有旧值
-  const selectedRows = tasks.value.filter((r) => selectedIds.value.includes(r.id))
-  for (const row of selectedRows) {
-    await updateTaskApi(row.id, pickEditable(row))
+  const selectedRows = tableData.value.filter((r) => selectedIds.value.includes(r.id))
+  try {
+    for (const row of selectedRows) {
+      await updateTaskApi(row.id, pickEditable(row))
+    }
+    const res = await submitTasksApi(selectedIds.value)
+    const ok = res.data.success_ids?.length || 0
+    const skip = res.data.skipped?.length || 0
+    ElMessage.success(`提交完成：成功 ${ok} 条，跳过 ${skip} 条`)
+    await loadTasks()
+  } catch (e) {
+    // 请求错误已由 axios 拦截器提示；此处避免未捕获异常导致“点了没反应”
+    console.error('批量提交失败', e)
   }
-  const res = await submitTasksApi(selectedIds.value)
-  const ok = res.data.success_ids?.length || 0
-  const skip = res.data.skipped?.length || 0
-  ElMessage.success(`提交完成：成功 ${ok} 条，跳过 ${skip} 条`)
-  await loadTasks()
 }
 
 onMounted(async () => {

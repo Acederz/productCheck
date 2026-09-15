@@ -1,1 +1,0 @@
-import{z as r}from"./index-iNVH1stk.js";function u(){return r.get("/users")}function n(e){return r.post("/users",e)}function i(e,s){return r.put(`/users/${e}`,s)}function p(e){return r.delete(`/users/${e}`)}export{n as c,p as d,u as l,i as u};
