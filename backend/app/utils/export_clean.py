@@ -1,8 +1,9 @@
 """导出数据清洗工具。
 
-管理员导出时，对「类别」及之后字段做展示清洗：
-- 去掉英文/中文括号及其内容（白名单整词保留）
+管理员导出时，对「区隔」及之后分类字段做展示清洗：
+- 去掉英文/中文括号及其内容（白名单整词保留，见 _PAREN_KEEP_VALUES）
 - 单独的「-」视为空；多值中的「-」丢弃（如 盒装、- → 盒装）
+- 多值用英文加号「+」拼成一格
 """
 
 from __future__ import annotations
@@ -10,8 +11,12 @@ from __future__ import annotations
 import re
 from typing import Any
 
-# 导出时需清洗的字段（自「类别」起，含主材质等）
+# 多值导出连接符（区隔/类别等）
+EXPORT_MULTI_VALUE_SEP = "+"
+
+# 导出时需清洗的字段（自「区隔」起，含类别、主材质等）
 EXPORT_CLEAN_FIELDS = (
+    "category_segment",
     "category_type",
     "material_main",
     "material_aux",
@@ -62,12 +67,12 @@ def _clean_token(token: str) -> str:
 
 def clean_export_classification_value(value: Any) -> str:
     """
-    清洗类别及后续分类字段的导出值。
+    清洗区隔及后续分类字段的导出值。
 
     参数:
         value: 字符串、逗号分隔多值，或 list
     返回:
-        清洗后的导出字符串（多值用中文逗号连接）；无效则为空串
+        清洗后的导出字符串（多值用 + 连接）；无效则为空串
     """
     if value is None:
         return ""
@@ -90,19 +95,21 @@ def clean_export_classification_value(value: Any) -> str:
             continue
         seen.add(item)
         cleaned.append(item)
-    return "，".join(cleaned)
+    return EXPORT_MULTI_VALUE_SEP.join(cleaned)
 
 
 def upper_classification_text(value: Any) -> str:
     """
     正式库展示/导出：分类字段中的英文字母统一大写（中文等不变）。
 
-    仅做展示层转换，不写回数据库。
+    仅做展示层转换，不写回数据库。多值 list 用 + 连接。
     """
     if value is None:
         return ""
     if isinstance(value, (list, tuple, set)):
-        text = "，".join(str(v).strip() for v in value if str(v).strip())
+        text = EXPORT_MULTI_VALUE_SEP.join(
+            str(v).strip() for v in value if str(v).strip()
+        )
     else:
         text = str(value).strip()
     if not text or text == "-":

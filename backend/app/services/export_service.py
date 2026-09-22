@@ -49,7 +49,6 @@ class ExportService:
 
     def _task_base_row(self, task: ClassificationTask) -> list:
         """任务 19 列业务字段。"""
-        segment = "，".join(task.category_segment or []) if task.category_segment else ""
         desc = ""
         if task.desc_images:
             desc = json.dumps(task.desc_images, ensure_ascii=False)
@@ -62,8 +61,8 @@ class ExportService:
             task.brand or "",
             task.is_operating or "",
             task.category_large or "",
-            segment,
-            # 自「类别」起导出清洗：去括号内容（白名单除外）、「-」置空
+            # 自「区隔」起导出清洗：去括号（白名单除外）、「-」置空、多值用 +
+            clean_export_classification_value(task.category_segment),
             clean_export_classification_value(task.category_type),
             clean_export_classification_value(task.material_main),
             clean_export_classification_value(task.material_aux),
@@ -93,7 +92,6 @@ class ExportService:
 
     def _approved_base_row(self, item: ApprovedProduct) -> list:
         """正式库 19 列（分类字段英文字母导出为大写）。"""
-        segment = "，".join(item.category_segment or []) if item.category_segment else ""
         desc = ""
         if item.desc_images:
             desc = json.dumps(item.desc_images, ensure_ascii=False)
@@ -105,8 +103,8 @@ class ExportService:
             item.brand or "",
             upper_classification_text(item.is_operating),
             upper_classification_text(item.category_large),
-            upper_classification_text(segment),
-            # 自「类别」起：先清洗括号/横杠，再英文字母大写
+            # 自「区隔」起：先清洗括号/横杠/+ 拼接，再英文字母大写
+            clean_and_upper_classification_value(item.category_segment),
             clean_and_upper_classification_value(item.category_type),
             clean_and_upper_classification_value(item.material_main),
             clean_and_upper_classification_value(item.material_aux),
