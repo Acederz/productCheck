@@ -148,6 +148,13 @@ ATTR_TO_PATH_FIELD = {
     "path_roll": ("卷数", False),
 }
 
+# 主表/补充规则路径上的 0、1 表示「模式占位」而非真实选项值
+_PATH_PLACEHOLDER_VALUES = frozenset({"0", "1"})
+# 这些字段可能手填或主表写占位 0/1；不得用手填值去做精确级联过滤
+_FREE_TEXT_PATH_FIELDS = ("辅材质", "包装方式", "尺寸", "卷数")
+# 主规则树节点上可能出现占位 0/1 的列（对应 CASCADE 字段）
+_NODE_PLACEHOLDER_FIELDS = frozenset({"辅材质", "包装方式"})
+
 
 class RuleService:
     """分类规则业务逻辑。"""
@@ -324,13 +331,80 @@ class RuleService:
             return [p for p in parts if p]
         return [text]
 
+    def _supplement_rules_are_text_only(
+        self, field_name: str, path: dict, version_id: int
+    ) -> bool:
+        """补充 Sheet 匹配结果是否全为文本模式（有 0、无 1）。"""
+        matched = self._matched_field_rules(field_name, path, version_id)
+        text_rules = [r for r in matched if r.input_mode == "0"]
+        select_rules = [r for r in matched if r.input_mode == "1"]
+        return bool(text_rules and not select_rules)
+
+    def _field_is_text_only(self, field_name: str, path: dict, version_id: int) -> bool:
+        """
+        当前路径下该字段是否为纯文本手填。
+
+        手填值不在主规则选项集中，不能用于精确过滤下级选项或补充规则路径。
+        覆盖：辅材质/包装方式（补充 Sheet）、尺寸/卷数（主表 mode + 补充 Sheet）。
+        """
+        if field_name not in _FREE_TEXT_PATH_FIELDS:
+            return False
+
+        if field_name in ("辅材质", "包装方式"):
+            return self._supplement_rules_are_text_only(field_name, path, version_id)
+
+        # 尺寸：主表有具体尺寸选项则非文本；否则看补充 Sheet
+        if field_name == "尺寸":
+            nodes = self._filter_nodes(version_id, path)
+            if any(
+                n.size_option and str(n.size_option).strip() not in _PATH_PLACEHOLDER_VALUES
+                for n in nodes
+            ):
+                return False
+            return self._supplement_rules_are_text_only("尺寸", path, version_id)
+
+        # 卷数：主表 roll_input_mode，1 优先于 0
+        if field_name == "卷数":
+            nodes = self._filter_nodes(version_id, path)
+            modes = {n.roll_input_mode for n in nodes if n.roll_input_mode in ("0", "1")}
+            if "1" in modes:
+                return False
+            if "0" in modes:
+                return True
+            return self._supplement_rules_are_text_only("卷数", path, version_id)
+
+        return False
+
+    def _path_for_node_filter(self, path: dict, version_id: int) -> dict:
+        """
+        供主规则树过滤用的路径：去掉纯文本手填字段。
+
+        例：垃圾袋类辅材质为手填「2丝」时，主表节点辅材质多为占位「0」，
+        若仍用「2丝」过滤会导致包装方式/尺寸等下级选项为空。
+        （尺寸/卷数不在 CASCADE_FIELDS，无需从本路径剔除。）
+        """
+        if not path:
+            return {}
+        filtered = dict(path)
+        for field_name in ("辅材质", "包装方式"):
+            if field_name in filtered and self._field_is_text_only(
+                field_name, path, version_id
+            ):
+                filtered.pop(field_name, None)
+        return filtered
+
     def _filter_nodes(self, version_id: int, path: dict) -> list:
         """
         按已选路径过滤主规则节点。
 
         多选字段取并集：某一路径字段若选了多个值，节点在该字段上
         只要落在已选集合内即算匹配（各字段之间仍为 AND）。
+
+        防空选项（同类问题统一处理）：
+        1. 纯文本手填的辅材质/包装方式不参与过滤；
+        2. 主表节点上辅材质/包装方式为占位「0」「1」时视为通配，不要求等于手填值。
         """
+        filter_path = self._path_for_node_filter(path, version_id)
         nodes = ClassificationRuleNode.query.filter_by(
             version_id=version_id, is_active=True
         ).all()
@@ -340,14 +414,21 @@ class RuleService:
             ok = True
             for field in CASCADE_FIELDS:
                 attr = FIELD_TO_NODE_ATTR[field]
-                selected_list = self._as_selected_list(path.get(field))
+                selected_list = self._as_selected_list(filter_path.get(field))
                 if not selected_list:
                     continue
                 node_val = getattr(node, attr)
                 if node_val is None or str(node_val).strip() == "":
                     ok = False
                     break
-                if str(node_val) not in selected_list:
+                node_text = str(node_val).strip()
+                # 主表占位 0/1：表示「该列非固定选项」，不参与精确匹配
+                if (
+                    field in _NODE_PLACEHOLDER_FIELDS
+                    and node_text in _PATH_PLACEHOLDER_VALUES
+                ):
+                    continue
+                if node_text not in selected_list:
                     ok = False
                     break
             if ok:
@@ -367,6 +448,7 @@ class RuleService:
         判断补充规则是否匹配当前路径（仅匹配该字段之前的路径前缀）。
 
         多选时：规则路径值落在已选并集内即匹配。
+        防空选项：上游为文本手填，或规则路径列为占位 0/1 时，不强制等于手填值。
         """
         attrs = FIELD_MATCH_ATTRS.get(rule.field_name, list(ATTR_TO_PATH_FIELD.keys()))
         for attr in attrs:
@@ -374,8 +456,22 @@ class RuleService:
             rule_val = getattr(rule, attr)
             if not rule_val:
                 continue
+            rule_text = str(rule_val).strip()
+            # 规则路径上的 0/1 占位：不要求用户已选手填值等于 0/1
+            if (
+                field in _FREE_TEXT_PATH_FIELDS
+                and rule_text in _PATH_PLACEHOLDER_VALUES
+            ):
+                continue
+            # 避免递归：仅跳过「当前规则字段」之前的文本模式上游
+            if (
+                field in _FREE_TEXT_PATH_FIELDS
+                and field != rule.field_name
+                and self._field_is_text_only(field, path, rule.version_id)
+            ):
+                continue
             selected_list = self._as_selected_list(path.get(field))
-            if not selected_list or str(rule_val) not in selected_list:
+            if not selected_list or rule_text not in selected_list:
                 return False
         return True
 
@@ -408,16 +504,17 @@ class RuleService:
         field_rule_hint = ""
         if field in ("辅材质", "包装方式"):
             matched = self._matched_field_rules(field, path, version.id)
-            text_rules = [r for r in matched if r.input_mode == "0"]
-            select_rules = [r for r in matched if r.input_mode == "1"]
-            # 仅当全部匹配为文本模式时才切文本框，否则取下拉选项并集
-            if text_rules and not select_rules:
+            if self._field_is_text_only(field, path, version.id):
                 return {
                     "field": field,
                     "options": [],
                     "input_mode": "text",
-                    "hint": self._pick_first_unique_hint(text_rules),
+                    "hint": self._pick_first_unique_hint(
+                        [r for r in matched if r.input_mode == "0"]
+                    ),
                 }
+            select_rules = [r for r in matched if r.input_mode == "1"]
+            text_rules = [r for r in matched if r.input_mode == "0"]
             field_rule_hint = self._pick_first_unique_hint(select_rules or text_rules)
 
         nodes = self._filter_nodes(version.id, path)
