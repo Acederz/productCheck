@@ -18,6 +18,7 @@ ACTION_LABELS = {
     "approve_tasks": "审核通过",
     "approve_tasks_scope": "按范围审核通过",
     "reject_tasks": "审核驳回",
+    "reject_tasks_scope": "按范围审核驳回",
     "create_user": "创建用户",
     "update_user": "更新用户",
     "update_config": "修改系统设置",

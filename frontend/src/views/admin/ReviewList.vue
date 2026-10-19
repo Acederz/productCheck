@@ -9,6 +9,7 @@
               type="success"
               plain
               :loading="scopeApproving"
+              :disabled="scopeRejecting"
               @click="handleApproveScope('all')"
             >
               全部审核通过
@@ -17,9 +18,28 @@
               type="success"
               plain
               :loading="scopeApproving"
+              :disabled="scopeRejecting"
               @click="handleApproveScope('filtered')"
             >
               按当前条件审核通过
+            </el-button>
+            <el-button
+              type="danger"
+              plain
+              :loading="scopeRejecting"
+              :disabled="scopeApproving"
+              @click="handleRejectScope('all')"
+            >
+              全部驳回
+            </el-button>
+            <el-button
+              type="danger"
+              plain
+              :loading="scopeRejecting"
+              :disabled="scopeApproving"
+              @click="handleRejectScope('filtered')"
+            >
+              按当前条件驳回
             </el-button>
             <el-button
               type="success"
@@ -350,6 +370,8 @@ import {
   approveScopeCountApi,
   listPendingReviewsApi,
   rejectReviewsApi,
+  rejectScopeApi,
+  rejectScopeCountApi,
 } from '@/api/reviews'
 import { listUsersApi } from '@/api/users'
 import {
@@ -379,8 +401,13 @@ const {
 
 const loading = ref(false)
 const rejecting = ref(false)
-/** 范围审核（全部/按条件）提交中，两按钮共用 loading */
+/** 范围审核通过（全部/按条件）提交中 */
 const scopeApproving = ref(false)
+/** 范围驳回（全部/按条件）提交中 */
+const scopeRejecting = ref(false)
+/** 驳回弹窗模式：勾选 ids，或按范围 scope */
+const rejectMode = ref('ids')
+const rejectScope = ref('filtered')
 const tableData = ref([])
 const selectedIds = ref([])
 const page = ref(1)
@@ -681,26 +708,71 @@ async function handleApproveScope(scope) {
 }
 
 function openRejectDialog(ids) {
+  rejectMode.value = 'ids'
   rejectTargetIds.value = [...ids]
   rejectReason.value = ''
   showRejectDialog.value = true
 }
 
+/** 全部 / 按当前筛选条件批量驳回：先查条数，确认后打开可选原因弹窗 */
+async function handleRejectScope(scope) {
+  const filters = buildScopeFilters()
+  const countParams =
+    scope === 'all' ? { scope: 'all' } : { scope: 'filtered', ...filters }
+  const countRes = await rejectScopeCountApi(countParams)
+  const n = countRes.data?.count ?? 0
+  if (n === 0) {
+    ElMessage.info('当前没有待审核数据')
+    return
+  }
+  const tip =
+    scope === 'all'
+      ? `将驳回全部待审核数据共 ${n} 条，且不受当前筛选影响。是否继续？`
+      : `将按当前查询条件驳回 ${n} 条。是否继续？`
+  try {
+    await ElMessageBox.confirm(tip, '确认驳回', { type: 'warning' })
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') return
+    throw e
+  }
+  rejectMode.value = 'scope'
+  rejectScope.value = scope
+  rejectTargetIds.value = []
+  rejectReason.value = ''
+  showRejectDialog.value = true
+}
+
 async function handleRejectConfirm() {
-  if (!rejectTargetIds.value.length) {
+  if (rejectMode.value === 'ids' && !rejectTargetIds.value.length) {
     ElMessage.warning('请选择要驳回的任务')
     return
   }
   rejecting.value = true
+  if (rejectMode.value === 'scope') {
+    scopeRejecting.value = true
+  }
   try {
-    const res = await rejectReviewsApi(rejectTargetIds.value, rejectReason.value)
+    let res
+    if (rejectMode.value === 'scope') {
+      const filters = buildScopeFilters()
+      res = await rejectScopeApi({
+        scope: rejectScope.value,
+        filters: rejectScope.value === 'filtered' ? filters : undefined,
+        reason: rejectReason.value || '',
+      })
+    } else {
+      res = await rejectReviewsApi(rejectTargetIds.value, rejectReason.value)
+    }
     ElMessage.success(res.message)
     showRejectDialog.value = false
     rejectReason.value = ''
     rejectTargetIds.value = []
+    rejectMode.value = 'ids'
+    selectedIds.value = []
     await loadList()
   } finally {
     rejecting.value = false
+    scopeRejecting.value = false
   }
 }
 

@@ -195,3 +195,47 @@ class ReviewService:
         )
         db.session.commit()
         return {"success_ids": success, "skipped": skipped}
+
+    def reject_by_scope(
+        self,
+        task_ids: list,
+        admin_id: int,
+        *,
+        scope: str,
+        filters: dict | None = None,
+        reason: str = "",
+    ) -> dict:
+        """先收集匹配待审核 ID 后，按批调用 reject_tasks 完成范围驳回。"""
+        total_matched = len(task_ids)
+        success_count = 0
+        skipped_count = 0
+        reason_text = reason or ""
+
+        for i in range(0, total_matched, APPROVE_SCOPE_BATCH_SIZE):
+            batch = task_ids[i : i + APPROVE_SCOPE_BATCH_SIZE]
+            if not batch:
+                continue
+            result = self.reject_tasks(batch, admin_id, reason=reason_text)
+            success_count += len(result["success_ids"])
+            skipped_count += len(result["skipped"])
+
+        write_operation_log(
+            admin_id,
+            "reject_tasks_scope",
+            "task",
+            None,
+            {
+                "scope": scope,
+                "success_count": success_count,
+                "skipped_count": skipped_count,
+                "filters": filters or {},
+                "reason": reason_text,
+            },
+        )
+        db.session.commit()
+
+        return {
+            "success_count": success_count,
+            "skipped_count": skipped_count,
+            "total_matched": total_matched,
+        }

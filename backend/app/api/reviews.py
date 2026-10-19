@@ -179,6 +179,50 @@ def approve_scope():
     return success(result, message=msg)
 
 
+@reviews_bp.get("/reject-scope-count")
+@admin_required
+def reject_scope_count():
+    """按范围统计待审核条数（与 approve-scope-count 口径一致）。"""
+    scope = _parse_approve_scope(request.args.get("scope"))
+    if not scope:
+        return fail("scope 参数无效，应为 all 或 filtered", 400)
+
+    filters = _filters_from_request_args()
+    query = _build_pending_query(
+        filters, apply_filters=(scope == "filtered")
+    )
+    return success({"count": query.count()})
+
+
+@reviews_bp.post("/reject-scope")
+@admin_required
+def reject_scope():
+    """按范围批量驳回（原因可空）。"""
+    data = request.get_json(silent=True) or {}
+    scope = _parse_approve_scope(data.get("scope"))
+    if not scope:
+        return fail("scope 参数无效，应为 all 或 filtered", 400)
+
+    filters = _filters_from_body(data)
+    reason = data.get("reason") or ""
+    query = _build_pending_query(
+        filters, apply_filters=(scope == "filtered")
+    )
+    ids = [row.id for row in query.with_entities(ClassificationTask.id).all()]
+
+    result = review_service.reject_by_scope(
+        ids,
+        g.current_user.id,
+        scope=scope,
+        filters=filters,
+        reason=reason,
+    )
+    msg = f"已驳回 {result['success_count']} 条"
+    if result["skipped_count"]:
+        msg += f"，跳过 {result['skipped_count']} 条"
+    return success(result, message=msg)
+
+
 @reviews_bp.post("/approve")
 @admin_required
 def approve_reviews():
