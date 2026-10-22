@@ -296,26 +296,27 @@ export function createRowCascadeState() {
   })
 }
 
-/** 将字段值规范为数组（界面多选绑定） */
+/**
+ * 将字段值规范为数组（界面多选绑定）。
+ * 后端已改为 JSON 数组；旧逗号串仅作兼容（选项名含逗号时以后端智能解析为准）。
+ */
 export function normalizeMultiField(value, field) {
-  if (field === 'category_segment') {
-    if (Array.isArray(value)) return value.filter(Boolean)
-    if (value) return [value]
-    return []
-  }
   if (Array.isArray(value)) return value.filter(Boolean)
+  if (value == null || value === '') return []
+  // 区隔历史偶发单字符串：整段当作一项，避免误拆
+  if (field === 'category_segment') {
+    return [String(value).trim()].filter(Boolean)
+  }
   if (typeof value === 'string' && value.trim()) {
+    // 兼容未迁移旧数据；新写入均为数组
     return value.split(/[,，]/).map((s) => s.trim()).filter(Boolean)
   }
-  return []
+  return [String(value)].filter(Boolean)
 }
 
-/** 保存到后端：区隔为数组，其余多选字段为逗号分隔字符串 */
+/** 保存到后端：所有多选字段一律提交数组（与区隔一致） */
 export function serializeMultiField(value, field) {
-  if (field === 'category_segment') {
-    return normalizeMultiField(value, field)
-  }
-  return normalizeMultiField(value, field).join(',')
+  return normalizeMultiField(value, field)
 }
 
 /**

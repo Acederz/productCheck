@@ -1,5 +1,7 @@
 """数据库初始化脚本。"""
 
+import json
+
 from sqlalchemy import inspect, text
 
 from app.constants import ROLE_ADMIN
@@ -17,6 +19,123 @@ from app.models import (
     User,
 )
 from app.models.user import SystemConfig
+from app.utils.multi_value import (
+    MULTI_JSON_FIELDS,
+    load_known_option_sets_from_rules,
+    normalize_multi_for_storage,
+)
+
+# 任务/正式库需检查/迁移的多选列
+_MULTI_JSON_COLUMNS = tuple(sorted(MULTI_JSON_FIELDS))
+
+
+def _column_type_name(col_info: dict) -> str:
+    return str(col_info.get("type", "")).upper()
+
+
+def _exec_with_deadlock_retry(fn, *, retries: int = 5, label: str = ""):
+    """MySQL 死锁时短等待重试。"""
+    import time
+
+    from sqlalchemy.exc import OperationalError
+
+    last_err = None
+    for attempt in range(retries):
+        try:
+            return fn()
+        except OperationalError as exc:
+            last_err = exc
+            # 1213 deadlock
+            if "1213" not in str(exc) and "Deadlock" not in str(exc):
+                raise
+            db.session.rollback()
+            time.sleep(0.3 * (attempt + 1))
+            print(f"死锁重试 {label} ({attempt + 1}/{retries})")
+    raise last_err
+
+
+def _migrate_one_multi_column(
+    table: str, col: str, known: set[str]
+) -> bool:
+    """迁移单列；已是 JSON 返回 False。"""
+    inspector = inspect(db.engine)
+    cols = {c["name"]: c for c in inspector.get_columns(table)}
+    if col not in cols:
+        return False
+    type_name = _column_type_name(cols[col])
+    if "JSON" in type_name:
+        return False
+
+    def _widen():
+        if "TEXT" not in type_name and "JSON" not in type_name:
+            db.session.execute(
+                text(f"ALTER TABLE `{table}` MODIFY COLUMN `{col}` TEXT NULL")
+            )
+            db.session.commit()
+
+    _exec_with_deadlock_retry(_widen, label=f"{table}.{col} TEXT")
+
+    rows = db.session.execute(
+        text(f"SELECT `id`, `{col}` FROM `{table}` WHERE `{col}` IS NOT NULL")
+    ).fetchall()
+    batch_n = 0
+    for row_id, raw in rows:
+        if isinstance(raw, (list, dict)):
+            parsed = normalize_multi_for_storage(raw, known)
+        else:
+            text_val = str(raw).strip() if raw is not None else ""
+            if text_val.startswith("[") and text_val.endswith("]"):
+                try:
+                    parsed = normalize_multi_for_storage(json.loads(text_val), known)
+                except json.JSONDecodeError:
+                    parsed = normalize_multi_for_storage(text_val, known)
+            else:
+                parsed = normalize_multi_for_storage(text_val, known)
+
+        def _update(rid=row_id, val=parsed):
+            db.session.execute(
+                text(f"UPDATE `{table}` SET `{col}` = :v WHERE `id` = :id"),
+                {
+                    "v": json.dumps(val, ensure_ascii=False) if val else None,
+                    "id": rid,
+                },
+            )
+
+        _exec_with_deadlock_retry(_update, label=f"{table}.{col} id={row_id}")
+        batch_n += 1
+        if batch_n % 200 == 0:
+            db.session.commit()
+    db.session.commit()
+
+    def _to_json():
+        db.session.execute(
+            text(f"ALTER TABLE `{table}` MODIFY COLUMN `{col}` JSON NULL")
+        )
+        db.session.commit()
+
+    _exec_with_deadlock_retry(_to_json, label=f"{table}.{col} JSON")
+    return True
+
+
+def _migrate_table_multi_columns_to_json(table: str, known_by_field: dict[str, set[str]]):
+    """
+    将表中多选列从 VARCHAR/TEXT 迁为 JSON 数组。
+
+    步骤：先改为 TEXT → 写入 JSON 文本 → 再改为 JSON。
+    已是 JSON 的列跳过。
+    """
+    inspector = inspect(db.engine)
+    if table not in inspector.get_table_names():
+        return
+    migrated = []
+    for col in _MULTI_JSON_COLUMNS:
+        known = known_by_field.get(col) or set()
+        if _migrate_one_multi_column(table, col, known):
+            migrated.append(col)
+            print(f"  完成 {table}.{col}")
+
+    if migrated:
+        print(f"已迁移 {table} 多选列为 JSON: {', '.join(migrated)}")
 
 
 def ensure_schema(app):
@@ -28,7 +147,8 @@ def ensure_schema(app):
     with app.app_context():
         db.create_all()
         inspector = inspect(db.engine)
-        if "approved_products" not in inspector.get_table_names():
+        tables = set(inspector.get_table_names())
+        if "approved_products" not in tables:
             return
 
         cols = {c["name"] for c in inspector.get_columns("approved_products")}
@@ -43,6 +163,12 @@ def ensure_schema(app):
             )
             db.session.commit()
             print("已为 approved_products 增加 batch_id 字段")
+
+        # 分类多选：VARCHAR 逗号串 → JSON 数组（兼容「金,银丝…」）
+        known = load_known_option_sets_from_rules()
+        if "classification_tasks" in tables:
+            _migrate_table_multi_columns_to_json("classification_tasks", known)
+        _migrate_table_multi_columns_to_json("approved_products", known)
 
 
 def init_database(app):

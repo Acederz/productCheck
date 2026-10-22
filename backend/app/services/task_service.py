@@ -17,6 +17,11 @@ from app.models.task import ClassificationTask, TaskDraft
 from app.models.user import User
 from app.services.operation_log_service import write_operation_log
 from app.services.rule_service import RuleService
+from app.utils.multi_value import (
+    MULTI_JSON_FIELDS,
+    normalize_multi_for_storage,
+    parse_stored_multi_value,
+)
 
 # 可编辑业务字段
 EDITABLE_FIELDS = {
@@ -58,33 +63,28 @@ class TaskService:
     def __init__(self):
         self.rule_service = RuleService()
 
+    def _path_list(self, value) -> list:
+        """路径字段统一为列表（兼容旧逗号串）。"""
+        return parse_stored_multi_value(value)
+
     def _build_path(self, task: ClassificationTask) -> dict:
         """从任务构建规则路径字典。"""
         return {
             "大类": task.category_large,
-            "区隔": task.category_segment or [],
-            "类别": task.category_type,
-            "主材质": task.material_main,
-            "辅材质": task.material_aux,
-            "包装方式": task.packaging,
-            "尺寸": task.size,
-            "卷数": task.roll_count,
+            "区隔": self._path_list(task.category_segment),
+            "类别": self._path_list(task.category_type),
+            "主材质": self._path_list(task.material_main),
+            "辅材质": self._path_list(task.material_aux),
+            "包装方式": self._path_list(task.packaging),
+            "尺寸": self._path_list(task.size),
+            "卷数": self._path_list(task.roll_count),
         }
 
     def _normalize_multi_value(self, field: str, value):
-        """将前端多选值规范为数据库存储格式。"""
-        if value is None:
-            return None
-        if field == "category_segment":
-            if isinstance(value, list):
-                cleaned = [str(v).strip() for v in value if str(v).strip()]
-                return cleaned or None
-            text = str(value).strip()
-            return [text] if text else None
-        if isinstance(value, list):
-            cleaned = [str(v).strip() for v in value if str(v).strip()]
-            return ",".join(cleaned) if cleaned else None
-        return value
+        """将前端多选值规范为 JSON 数组（空则 None）。"""
+        if field not in MULTI_JSON_FIELDS:
+            return value
+        return normalize_multi_for_storage(value)
 
     def _normalize_category_large(self, value):
         """大类为单选：列表或逗号串只保留第一个有效值。"""
@@ -126,16 +126,6 @@ class TaskService:
     def _apply_editable_fields(self, task: ClassificationTask, data: dict) -> list:
         """应用可编辑字段，返回变更列表 [(field, old, new)]。"""
         changes = []
-        multi_fields = {
-            "category_segment",
-            "category_type",
-            "material_main",
-            "material_aux",
-            "packaging",
-            "size",
-            "roll_count",
-            "total_count",
-        }
         for field in EDITABLE_FIELDS:
             if field not in data:
                 continue
@@ -143,7 +133,7 @@ class TaskService:
             new = data[field]
             if field == "category_large":
                 new = self._normalize_category_large(new)
-            elif field in multi_fields:
+            elif field in MULTI_JSON_FIELDS:
                 new = self._normalize_multi_value(field, new)
             if old != new:
                 changes.append((field, old, new))

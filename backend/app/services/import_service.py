@@ -21,6 +21,10 @@ from app.models.task import ClassificationTask, ImportBatch
 from app.models.user import User
 from app.services.operation_log_service import write_operation_log
 from app.utils.excel_helper import cell_str, parse_desc_images, parse_segment
+from app.utils.multi_value import (
+    load_known_option_sets_from_rules,
+    normalize_multi_for_storage,
+)
 
 # Excel 列名 -> 模型字段（业务 19 列）
 HEADER_FIELD_MAP = {
@@ -150,11 +154,18 @@ class ImportService:
             except ValueError:
                 row_no = None
 
+        known = load_known_option_sets_from_rules()
         segment = row_data.get("category_segment")
         if isinstance(segment, str):
             segment = parse_segment(segment)
-        elif segment is None:
-            segment = []
+        segment = normalize_multi_for_storage(
+            segment, known.get("category_segment")
+        )
+
+        def _multi(field: str):
+            raw = row_data.get(field)
+            text = cell_str(raw) if raw is not None else ""
+            return normalize_multi_for_storage(text or None, known.get(field))
 
         status = TASK_STATUS_PENDING if assignee else TASK_STATUS_UNASSIGNED
         return ClassificationTask(
@@ -171,13 +182,13 @@ class ImportService:
             is_operating=cell_str(row_data.get("is_operating")) or None,
             category_large=cell_str(row_data.get("category_large")) or None,
             category_segment=segment,
-            category_type=cell_str(row_data.get("category_type")) or None,
-            material_main=cell_str(row_data.get("material_main")) or None,
-            material_aux=cell_str(row_data.get("material_aux")) or None,
-            packaging=cell_str(row_data.get("packaging")) or None,
-            size=cell_str(row_data.get("size")) or None,
-            roll_count=cell_str(row_data.get("roll_count")) or None,
-            total_count=cell_str(row_data.get("total_count")) or None,
+            category_type=_multi("category_type"),
+            material_main=_multi("material_main"),
+            material_aux=_multi("material_aux"),
+            packaging=_multi("packaging"),
+            size=_multi("size"),
+            roll_count=_multi("roll_count"),
+            total_count=_multi("total_count"),
             status=status,
             assignee_id=assignee.id if assignee else None,
             assigned_at=assigned_at if assignee else None,

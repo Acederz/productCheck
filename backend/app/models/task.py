@@ -69,14 +69,14 @@ class ClassificationTask(db.Model):
     # 可编辑分类字段
     is_operating = db.Column(db.String(16), nullable=True)
     category_large = db.Column(db.String(128), nullable=True)
-    category_segment = db.Column(db.JSON, nullable=True)  # 区隔多选
-    category_type = db.Column(db.String(128), nullable=True)
-    material_main = db.Column(db.String(128), nullable=True)
-    material_aux = db.Column(db.String(128), nullable=True)
-    packaging = db.Column(db.String(128), nullable=True)
-    size = db.Column(db.String(128), nullable=True)
-    roll_count = db.Column(db.String(128), nullable=True)
-    total_count = db.Column(db.String(128), nullable=True)
+    category_segment = db.Column(db.JSON, nullable=True)  # 区隔多选 JSON 数组
+    category_type = db.Column(db.JSON, nullable=True)  # 类别等多选 JSON 数组
+    material_main = db.Column(db.JSON, nullable=True)
+    material_aux = db.Column(db.JSON, nullable=True)
+    packaging = db.Column(db.JSON, nullable=True)
+    size = db.Column(db.JSON, nullable=True)
+    roll_count = db.Column(db.JSON, nullable=True)
+    total_count = db.Column(db.JSON, nullable=True)
 
     # 流程字段
     status = db.Column(
