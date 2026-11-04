@@ -7,6 +7,7 @@ from flask import Blueprint, current_app, g, request, send_file
 from app.extensions import db
 from app.models.task import ImportBatch
 from app.services.import_service import ImportService
+from app.utils.app_logging import log_request_exception
 from app.utils.auth_decorator import admin_required
 from app.utils.response import fail, success
 
@@ -56,6 +57,7 @@ def upload_import():
         return fail(str(exc))
     except Exception as exc:
         db.session.rollback()
+        log_request_exception("导入Excel", exc)
         return fail(f"导入失败：{exc}", 500)
 
     return success(_batch_to_dict(batch), message="导入完成")
@@ -103,5 +105,6 @@ def delete_import_batch(batch_id: int):
         return fail(msg, code)
     except Exception as exc:
         db.session.rollback()
+        log_request_exception("按批次删除", exc)
         return fail(f"删除失败：{exc}", 500)
     return success(result, message="删除完成")

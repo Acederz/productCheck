@@ -5,6 +5,7 @@ from flask import Blueprint, g, request
 from app.constants import ROLE_ADMIN, ROLE_OPERATOR
 from app.extensions import db
 from app.models.user import User
+from app.utils.app_logging import log_request_exception
 from app.utils.auth_decorator import admin_required
 from app.utils.response import fail, success
 
@@ -146,6 +147,7 @@ def delete_user(user_id: int):
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
+        log_request_exception("删除操作员", exc)
         return fail(f"删除失败：{exc}", 500)
 
     return success(message="删除成功")

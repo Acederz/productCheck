@@ -62,3 +62,15 @@ ehthumbs.db
 *.ntvs*
 *.njsproj
 *.sln
+
+# ========== 本地保留、不入库 ==========
+# AI 开发过程记录
+.superpowers/
+# 领导一页 PPT 及其生成脚本、设计稿（本机保留）
+docs/市场数据分类管理平台-一期总览.pptx
+docs/superpowers/plans/2026-08-18-leadership-og-ppt.md
+docs/superpowers/specs/2026-08-18-leadership-og-ppt-design.md
+scripts/generate_og_ppt.py
+scripts/test_generate_og_ppt.py
+# 本地测试用 Excel
+需求相关/分类20260831测试.xlsx

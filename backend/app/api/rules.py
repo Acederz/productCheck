@@ -6,6 +6,7 @@ from pathlib import Path
 from flask import Blueprint, current_app, g, request
 
 from app.services.rule_service import RuleService
+from app.utils.app_logging import log_request_exception
 from app.utils.auth_decorator import admin_required, login_required
 from app.utils.response import fail, success
 
@@ -90,6 +91,7 @@ def import_rules():
     except ValueError as exc:
         return fail(str(exc))
     except Exception as exc:
+        log_request_exception("导入分类规则", exc)
         return fail(f"规则导入失败：{exc}", 500)
 
     return success(result, message="规则导入成功")

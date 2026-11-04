@@ -44,6 +44,11 @@ class Config:
     UPLOAD_FOLDER = STORAGE_PATH / "uploads"
     EXPORT_FOLDER = STORAGE_PATH / "exports"
 
+    # 报错文件日志（滚动）；目录默认在 storage/logs
+    LOG_DIR = STORAGE_PATH / "logs"
+    LOG_MAX_BYTES = int(os.getenv("LOG_MAX_BYTES", str(10 * 1024 * 1024)))
+    LOG_BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", "10"))
+
     # 默认管理员
     ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
