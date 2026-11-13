@@ -64,7 +64,16 @@ class ProductionConfig(Config):
     DEBUG = False
 
 
+class TestingConfig(Config):
+    """单测专用：内存 SQLite，不连接共享 MySQL。"""
+
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = "sqlite://"
+    SQLALCHEMY_ENGINE_OPTIONS = {}
+
+
 config_map = {
     "development": DevelopmentConfig,
     "production": ProductionConfig,
+    "testing": TestingConfig,
 }

@@ -5,12 +5,29 @@
         <div class="card-header">
           <div class="header-left">
             <span class="page-title">我的任务</span>
-            <div class="task-stats" title="统计范围：管理员最近一次成功导入批次中分给你的数据">
+            <div class="task-stats" title="统计范围：所选批次中分给你的数据（与下方列表筛选无关）">
               <span class="stat-item is-total">总数据 <b>{{ taskStats.total }}</b></span>
               <span class="stat-item is-pending">待处理 <b>{{ taskStats.pending }}</b></span>
               <span class="stat-item is-submitted">已提交 <b>{{ taskStats.submitted }}</b></span>
               <span class="stat-item is-approved">已通过 <b>{{ taskStats.approved }}</b></span>
-              <span v-if="taskStats.batch_no" class="stat-batch">批次 {{ taskStats.batch_no }}</span>
+              <span v-if="statsBatchOptions.length" class="stat-batch">
+                批次
+                <el-select
+                  v-model="statsBatchId"
+                  size="small"
+                  filterable
+                  class="stat-batch-select"
+                  placeholder="选择批次"
+                  @change="handleStatsBatchChange"
+                >
+                  <el-option
+                    v-for="b in statsBatchOptions"
+                    :key="b.id"
+                    :label="`${b.batch_no} · ${b.file_name}`"
+                    :value="b.id"
+                  />
+                </el-select>
+              </span>
             </div>
           </div>
           <el-button
@@ -543,7 +560,14 @@ import {
   useCategoryQueryFilters,
 } from '@/composables/useCategoryQueryFilters'
 import FieldHintTooltip from '@/components/FieldHintTooltip.vue'
-import { myTasksApi, myTaskStatsApi, saveDraftApi, submitTasksApi, updateTaskApi } from '@/api/tasks'
+import {
+  myTaskBatchesApi,
+  myTasksApi,
+  myTaskStatsApi,
+  saveDraftApi,
+  submitTasksApi,
+  updateTaskApi,
+} from '@/api/tasks'
 import { useUserStore } from '@/stores/user'
 
 const {
@@ -563,7 +587,11 @@ const selectedIds = ref([])
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-/** 最新导入批次填写进度（与列表筛选无关） */
+/** 统计可切换的批次：只含分给自己任务的批次，新到旧 */
+const statsBatchOptions = ref([])
+/** 当前统计的批次 ID；默认最近一个批次 */
+const statsBatchId = ref(null)
+/** 所选批次填写进度（与列表筛选无关） */
 const taskStats = reactive({
   batch_id: null,
   batch_no: '',
@@ -914,16 +942,46 @@ function handlePageSizeChange() {
   loadTasks()
 }
 
+function applyTaskStats(data = {}) {
+  taskStats.batch_id = data.batch_id ?? null
+  taskStats.batch_no = data.batch_no || ''
+  taskStats.total = data.total || 0
+  taskStats.pending = data.pending || 0
+  taskStats.submitted = data.submitted || 0
+  taskStats.approved = data.approved || 0
+}
+
+/** 刷新可选批次；当前选择已不在列表时回到最近一个批次 */
+async function loadStatsBatches() {
+  const res = await myTaskBatchesApi()
+  const list = res.data || []
+  statsBatchOptions.value = list
+  if (!list.some((b) => b.id === statsBatchId.value)) {
+    statsBatchId.value = list[0]?.id ?? null
+  }
+}
+
+async function refreshTaskStats() {
+  if (!statsBatchId.value) {
+    applyTaskStats()
+    return
+  }
+  const res = await myTaskStatsApi(statsBatchId.value)
+  applyTaskStats(res.data || {})
+}
+
 async function loadTaskStats() {
   try {
-    const res = await myTaskStatsApi()
-    const data = res.data || {}
-    taskStats.batch_id = data.batch_id ?? null
-    taskStats.batch_no = data.batch_no || ''
-    taskStats.total = data.total || 0
-    taskStats.pending = data.pending || 0
-    taskStats.submitted = data.submitted || 0
-    taskStats.approved = data.approved || 0
+    await loadStatsBatches()
+    await refreshTaskStats()
+  } catch {
+    // 统计失败不阻断列表
+  }
+}
+
+async function handleStatsBatchChange() {
+  try {
+    await refreshTaskStats()
   } catch {
     // 统计失败不阻断列表
   }
@@ -1055,10 +1113,16 @@ onUnmounted(stopDescDrag)
   color: #67c23a;
 }
 .task-stats .stat-batch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: #c0c4cc;
   font-size: 12px;
-  padding-left: 4px;
+  padding-left: 10px;
   border-left: 1px solid #e4e7ed;
+}
+.task-stats .stat-batch-select {
+  width: 300px;
 }.filter-form {
   margin-bottom: 12px;
 }
