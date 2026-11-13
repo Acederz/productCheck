@@ -8,6 +8,7 @@ from app.utils.log_display import (
     enrich_operation_log,
     list_action_options,
 )
+from app.utils.time_utils import fmt_beijing
 
 
 class LogService:
@@ -56,7 +57,7 @@ class LogService:
                 "target_id": log.target_id,
                 "detail_json": log.detail_json,
                 "ip": log.ip,
-                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "created_at": fmt_beijing(log.created_at),
             }
             result_items.append(enrich_operation_log(data, users))
 
@@ -93,7 +94,7 @@ class LogService:
                 "new_value": log.new_value,
                 "reason": log.reason,
                 "username": users.get(log.operator_id, ""),
-                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "created_at": fmt_beijing(log.created_at),
             }
             result_items.append(enrich_field_change_log(data))
 

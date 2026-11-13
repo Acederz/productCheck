@@ -49,6 +49,22 @@ HEADER_FIELD_MAP = {
     "数据平台": "platform",
 }
 
+# 与 ImportBatch.fail_reason 列长度一致
+_FAIL_REASON_MAX_LEN = 500
+
+
+class ImportBatchError(Exception):
+    """整批导入失败。
+
+    :param batch: 已落库的「导入失败」批次
+    :param unexpected: True 表示服务器异常（非用户文件问题）
+    """
+
+    def __init__(self, message: str, batch: ImportBatch, unexpected: bool = False):
+        super().__init__(message)
+        self.batch = batch
+        self.unexpected = unexpected
+
 
 class ImportService:
     """处理待分类商品 Excel 导入。"""
@@ -223,8 +239,12 @@ class ImportService:
         wb.save(error_path)
         return str(error_path)
 
-    def import_excel(self, file_storage, user_id: int) -> ImportBatch:
-        """执行 Excel 导入（支持可选操作员列自动分配）。"""
+    def import_excel(self, file_storage, user_id: int) -> tuple[ImportBatch, dict]:
+        """执行 Excel 导入（支持可选操作员列自动分配）。
+
+        :return: ``(批次, {"warning_rows", "assigned_rows"})``
+        :raises ImportBatchError: 整批失败；已回滚本次数据并另存一条「导入失败」批次
+        """
         batch_no = self._gen_batch_no()
         safe_name = file_storage.filename or "import.xlsx"
         saved_path = self.upload_folder / f"{batch_no}_{safe_name}"
@@ -240,23 +260,61 @@ class ImportService:
         db.session.add(batch)
         db.session.flush()
 
-        wb = load_workbook(saved_path, read_only=True, data_only=True)
+        try:
+            summary = self._process_rows(batch, saved_path, user_id)
+        except ValueError as exc:
+            raise self._record_failed_batch(
+                batch_no, safe_name, saved_path, user_id, str(exc), unexpected=False
+            ) from exc
+        except Exception as exc:
+            reason = f"服务器异常：{type(exc).__name__}: {exc}"
+            raise self._record_failed_batch(
+                batch_no, safe_name, saved_path, user_id, reason, unexpected=True
+            ) from exc
+        return batch, summary
+
+    def _record_failed_batch(
+        self,
+        batch_no: str,
+        file_name: str,
+        saved_path: Path,
+        user_id: int,
+        reason: str,
+        unexpected: bool,
+    ) -> "ImportBatchError":
+        """回滚本次导入的全部写入，另存一条失败批次，返回待抛出的异常。"""
+        db.session.rollback()
+        failed = ImportBatch(
+            batch_no=batch_no,
+            file_name=file_name,
+            file_path=str(saved_path),
+            status="failed",
+            fail_reason=reason[:_FAIL_REASON_MAX_LEN],
+            uploaded_by=user_id,
+        )
+        db.session.add(failed)
+        db.session.commit()
+        return ImportBatchError(reason, failed, unexpected=unexpected)
+
+    def _process_rows(self, batch: ImportBatch, saved_path: Path, user_id: int) -> dict:
+        """解析 Excel 并写入任务；预期内的整批失败抛 ValueError。"""
+        try:
+            wb = load_workbook(saved_path, read_only=True, data_only=True)
+        except Exception as exc:
+            raise ValueError("文件无法读取，请确认是有效的 .xlsx 文件") from exc
         ws = wb.active
         rows = list(ws.iter_rows(values_only=True))
         wb.close()
 
         if not rows:
-            batch.status = "failed"
-            batch.total_rows = 0
-            db.session.commit()
             raise ValueError("Excel 文件为空")
 
         header_error, has_operator_col = self._validate_headers(list(rows[0]))
         if header_error:
-            batch.status = "failed"
-            db.session.commit()
             raise ValueError(header_error)
 
+        batch_no = batch.batch_no
+        safe_name = batch.file_name
         operator_map = self._load_operator_map() if has_operator_col else {}
         operator_col_idx = len(EXCEL_HEADERS) if has_operator_col else None
         now = datetime.utcnow()
@@ -354,7 +412,7 @@ class ImportService:
             },
         )
         db.session.commit()
-        return batch
+        return {"warning_rows": len(warnings), "assigned_rows": assigned_count}
 
     def delete_batch(self, batch_id: int, operator_id: int) -> dict:
         """按批次硬删除任务、匹配正式库与导入记录。"""

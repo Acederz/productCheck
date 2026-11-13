@@ -4,6 +4,7 @@ from datetime import datetime
 
 from app.constants import PLATFORMS, TASK_STATUS_UNASSIGNED, TASK_STATUSES
 from app.extensions import db
+from app.utils.time_utils import fmt_beijing
 
 
 class ImportBatch(db.Model):
@@ -19,6 +20,8 @@ class ImportBatch(db.Model):
     success_rows = db.Column(db.Integer, nullable=False, default=0)
     fail_rows = db.Column(db.Integer, nullable=False, default=0)
     error_report_path = db.Column(db.String(500), nullable=True)
+    # 整批导入失败时的原因（表头错误、文件无法读取、服务器异常等）
+    fail_reason = db.Column(db.String(500), nullable=True)
     status = db.Column(
         db.Enum("processing", "completed", "failed", name="import_status"),
         nullable=False,
@@ -38,8 +41,9 @@ class ImportBatch(db.Model):
             "fail_rows": self.fail_rows,
             "has_error_report": bool(self.error_report_path),
             "status": self.status,
+            "fail_reason": self.fail_reason,
             "uploaded_by": self.uploaded_by,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": fmt_beijing(self.created_at),
         }
 
 
@@ -124,13 +128,13 @@ class ClassificationTask(db.Model):
             "platform": self.platform,
             "status": self.status,
             "assignee_id": self.assignee_id,
-            "assigned_at": self.assigned_at.isoformat() if self.assigned_at else None,
-            "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,
+            "assigned_at": fmt_beijing(self.assigned_at),
+            "submitted_at": fmt_beijing(self.submitted_at),
             "reviewed_by": self.reviewed_by,
-            "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "reviewed_at": fmt_beijing(self.reviewed_at),
             "reject_reason": self.reject_reason,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": fmt_beijing(self.created_at),
+            "updated_at": fmt_beijing(self.updated_at),
         }
 
 

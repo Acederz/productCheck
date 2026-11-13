@@ -10,6 +10,7 @@ from app.services.skip_field_rule_service import SkipFieldRuleService
 from app.utils.app_logging import log_request_exception
 from app.utils.auth_decorator import admin_required, login_required
 from app.utils.response import fail, success
+from app.utils.time_utils import fmt_beijing
 
 skip_field_rules_bp = Blueprint("skip_field_rules", __name__)
 
@@ -27,7 +28,7 @@ def get_current_version():
             "id": version.id,
             "version_no": version.version_no,
             "remark": version.remark,
-            "created_at": version.created_at.isoformat() if version.created_at else None,
+            "created_at": fmt_beijing(version.created_at),
         }
     )
 

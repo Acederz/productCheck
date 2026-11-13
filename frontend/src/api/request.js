@@ -16,12 +16,12 @@ request.interceptors.request.use((config) => {
   return config
 })
 
-// 响应拦截：统一错误提示
+// 响应拦截：统一错误提示；请求配置 silent: true 时由调用方自行展示错误
 request.interceptors.response.use(
   (response) => {
     const res = response.data
     if (res.code !== 200) {
-      ElMessage.error(res.message || '请求失败')
+      if (!response.config?.silent) ElMessage.error(res.message || '请求失败')
       if (res.code === 401) {
         localStorage.removeItem('token')
         router.push('/login')
@@ -33,7 +33,7 @@ request.interceptors.response.use(
   (error) => {
     // HTTP 4xx/5xx 时优先展示后端返回的中文 message（如导入表头校验失败）
     const serverMsg = error.response?.data?.message
-    ElMessage.error(serverMsg || error.message || '网络错误')
+    if (!error.config?.silent) ElMessage.error(serverMsg || error.message || '网络错误')
     return Promise.reject(error)
   }
 )

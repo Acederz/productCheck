@@ -1,0 +1,1 @@
+import{A as e}from"./index-C2oD6cSC.js";function p(t){return e.get("/imports",{params:t})}function i(t){const r=new FormData;return r.append("file",t),e.post("/imports",r,{headers:{"Content-Type":"multipart/form-data"},silent:!0,timeout:300*1e3})}function n(t){return e.delete(`/imports/${t}`)}export{n as d,p as l,i as u};

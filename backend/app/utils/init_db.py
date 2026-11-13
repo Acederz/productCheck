@@ -148,6 +148,17 @@ def ensure_schema(app):
         db.create_all()
         inspector = inspect(db.engine)
         tables = set(inspector.get_table_names())
+
+        # 导入批次：整批失败原因
+        if "import_batches" in tables:
+            batch_cols = {c["name"] for c in inspector.get_columns("import_batches")}
+            if "fail_reason" not in batch_cols:
+                db.session.execute(
+                    text("ALTER TABLE import_batches ADD COLUMN fail_reason VARCHAR(500) NULL")
+                )
+                db.session.commit()
+                print("已为 import_batches 增加 fail_reason 字段")
+
         if "approved_products" not in tables:
             return
 

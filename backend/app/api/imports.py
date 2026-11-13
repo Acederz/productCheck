@@ -6,7 +6,7 @@ from flask import Blueprint, current_app, g, request, send_file
 
 from app.extensions import db
 from app.models.task import ImportBatch
-from app.services.import_service import ImportService
+from app.services.import_service import ImportBatchError, ImportService
 from app.utils.app_logging import log_request_exception
 from app.utils.auth_decorator import admin_required
 from app.utils.response import fail, success
@@ -52,15 +52,20 @@ def upload_import():
 
     service = ImportService(Path(current_app.config["UPLOAD_FOLDER"]))
     try:
-        batch = service.import_excel(file_storage, g.current_user.id)
-    except ValueError as exc:
-        return fail(str(exc))
+        batch, summary = service.import_excel(file_storage, g.current_user.id)
+    except ImportBatchError as exc:
+        # 失败批次已落库；data 带批次信息供前端结果框展示
+        if exc.unexpected:
+            log_request_exception("导入Excel", exc.__cause__ or exc)
+            return fail(f"导入失败：{exc}", 500, data=_batch_to_dict(exc.batch))
+        return fail(str(exc), 400, data=_batch_to_dict(exc.batch))
     except Exception as exc:
+        # 批次尚未创建前的异常（如上传文件保存失败）
         db.session.rollback()
         log_request_exception("导入Excel", exc)
         return fail(f"导入失败：{exc}", 500)
 
-    return success(_batch_to_dict(batch), message="导入完成")
+    return success({**_batch_to_dict(batch), **summary}, message="导入完成")
 
 
 @imports_bp.get("/<int:batch_id>")

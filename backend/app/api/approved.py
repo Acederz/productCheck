@@ -8,6 +8,7 @@ from app.models.user import User
 from app.utils.auth_decorator import admin_required
 from app.utils.query_filters import apply_batch_id_filter, apply_category_filters, parse_csv_arg
 from app.utils.response import success
+from app.utils.time_utils import fmt_beijing
 
 approved_bp = Blueprint("approved", __name__)
 
@@ -59,9 +60,9 @@ def _approved_to_dict(item: ApprovedProduct, users: dict, batches: dict) -> dict
         "source_task_id": item.source_task_id,
         "approved_by": item.approved_by,
         "approved_by_name": users.get(item.approved_by, "") if item.approved_by else "",
-        "approved_at": item.approved_at.isoformat() if item.approved_at else None,
-        "created_at": item.created_at.isoformat() if item.created_at else None,
-        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+        "approved_at": fmt_beijing(item.approved_at),
+        "created_at": fmt_beijing(item.created_at),
+        "updated_at": fmt_beijing(item.updated_at),
     }
 
 

@@ -22,6 +22,7 @@ from app.utils.multi_value import (
     normalize_multi_for_storage,
     parse_stored_multi_value,
 )
+from app.utils.time_utils import fmt_beijing
 
 # 可编辑业务字段
 EDITABLE_FIELDS = {
@@ -259,7 +260,7 @@ class TaskService:
             draft.updated_at = datetime.utcnow()
 
         db.session.commit()
-        return {"task_id": task_id, "updated_at": draft.updated_at.isoformat()}
+        return {"task_id": task_id, "updated_at": fmt_beijing(draft.updated_at)}
 
     def get_task_with_draft(self, task: ClassificationTask, user: User) -> dict:
         """获取任务详情，操作员优先合并草稿。"""

@@ -16,6 +16,7 @@ from app.utils.export_clean import (
     clean_export_classification_value,
     upper_classification_text,
 )
+from app.utils.time_utils import fmt_beijing
 
 # 导出附加列（任务）
 TASK_EXTRA_HEADERS = (
@@ -43,9 +44,10 @@ class ExportService:
         return {u.id: u.username for u in User.query.all()}
 
     def _fmt_time(self, dt) -> str:
+        """导出时间统一为北京时间；空值为空串。"""
         if not dt:
             return ""
-        return dt.strftime("%Y-%m-%d %H:%M:%S") if hasattr(dt, "strftime") else str(dt)
+        return fmt_beijing(dt) if isinstance(dt, datetime) else str(dt)
 
     def _task_base_row(self, task: ClassificationTask) -> list:
         """任务 19 列业务字段。"""

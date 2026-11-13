@@ -3,6 +3,7 @@
     <el-card shadow="never" class="upload-card">
       <template #header>上传待分类 Excel</template>
       <el-upload
+        ref="uploadRef"
         :auto-upload="false"
         :show-file-list="true"
         :limit="1"
@@ -35,7 +36,22 @@
         <el-table-column prop="total_rows" label="总行数" width="90" />
         <el-table-column prop="success_rows" label="成功" width="80" />
         <el-table-column prop="fail_rows" label="失败" width="80" />
-        <el-table-column prop="status" label="状态" width="100" />
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }">
+            <el-tooltip
+              v-if="row.fail_reason"
+              :content="row.fail_reason"
+              placement="top"
+            >
+              <el-tag :type="statusMeta(row).type" effect="light">
+                {{ statusMeta(row).label }}
+              </el-tag>
+            </el-tooltip>
+            <el-tag v-else :type="statusMeta(row).type" effect="light">
+              {{ statusMeta(row).label }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="created_at" label="导入时间" width="180" />
         <el-table-column label="操作" width="200">
           <template #default="{ row }">
@@ -54,11 +70,67 @@
         </el-table-column>
       </el-table>
     </el-card>
+
+    <el-dialog
+      v-model="resultVisible"
+      title="导入结果"
+      width="560px"
+      :close-on-click-modal="false"
+    >
+      <el-result
+        class="import-result"
+        :icon="resultView.icon"
+        :title="resultView.title"
+        :sub-title="resultView.subTitle"
+      >
+        <template v-if="importResult.batch" #extra>
+          <el-descriptions :column="2" border size="small" class="result-desc">
+            <el-descriptions-item label="批次号" :span="2">
+              {{ importResult.batch.batch_no }}
+            </el-descriptions-item>
+            <el-descriptions-item label="文件名" :span="2">
+              {{ importResult.batch.file_name }}
+            </el-descriptions-item>
+            <template v-if="importResult.kind !== 'failed'">
+              <el-descriptions-item label="总行数">
+                {{ importResult.batch.total_rows }}
+              </el-descriptions-item>
+              <el-descriptions-item label="成功">
+                {{ importResult.batch.success_rows }}
+              </el-descriptions-item>
+              <el-descriptions-item label="失败">
+                {{ importResult.batch.fail_rows }}
+              </el-descriptions-item>
+              <el-descriptions-item label="提醒">
+                {{ importResult.batch.warning_rows ?? 0 }}
+              </el-descriptions-item>
+              <el-descriptions-item label="自动分配">
+                {{ importResult.batch.assigned_rows ?? 0 }}
+              </el-descriptions-item>
+            </template>
+            <el-descriptions-item label="导入时间" :span="importResult.kind === 'failed' ? 2 : 1">
+              {{ importResult.batch.created_at }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </template>
+      </el-result>
+      <template #footer>
+        <el-button
+          v-if="importResult.batch?.has_error_report"
+          type="warning"
+          plain
+          @click="downloadErrors(importResult.batch.id)"
+        >
+          下载错误报告
+        </el-button>
+        <el-button type="primary" @click="resultVisible = false">知道了</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   listImportsApi,
@@ -72,7 +144,62 @@ const loading = ref(false)
 const uploading = ref(false)
 const batches = ref([])
 const selectedFile = ref(null)
+const uploadRef = ref(null)
 const userStore = useUserStore()
+
+/** 导入结果弹框：kind 为 success / partial / failed */
+const resultVisible = ref(false)
+const importResult = reactive({ kind: 'success', batch: null, message: '' })
+
+const resultView = computed(() => {
+  const batch = importResult.batch
+  if (importResult.kind === 'failed') {
+    return { icon: 'error', title: '导入失败', subTitle: importResult.message }
+  }
+  if (importResult.kind === 'partial') {
+    return {
+      icon: 'warning',
+      title: '部分导入成功',
+      subTitle: `成功 ${batch.success_rows} 行，失败 ${batch.fail_rows} 行，失败明细请下载错误报告`,
+    }
+  }
+  return {
+    icon: 'success',
+    title: '导入成功',
+    subTitle: `共 ${batch.success_rows} 行全部导入`,
+  }
+})
+
+/** 导入记录状态标签 */
+function statusMeta(row) {
+  if (row.status === 'failed') return { label: '导入失败', type: 'danger' }
+  if (row.status === 'processing') return { label: '导入中', type: 'info' }
+  if (row.fail_rows > 0) return { label: '部分失败', type: 'warning' }
+  return { label: '导入成功', type: 'success' }
+}
+
+/** 从上传异常中提取失败原因与失败批次 */
+function parseUploadError(e) {
+  // 服务器处理超过 300 秒会被中止并回滚，本次导入不会留下数据
+  if (e.code === 'ECONNABORTED' || [502, 504].includes(e.response?.status)) {
+    return {
+      batch: null,
+      message: '服务器处理超时（超过 5 分钟），本次导入未完成，请把文件拆小后重新导入',
+    }
+  }
+  const body = e.response?.data
+  return {
+    batch: body?.data || null,
+    message: body?.message || e.message || '网络错误',
+  }
+}
+
+function showResult(kind, batch, message = '') {
+  importResult.kind = kind
+  importResult.batch = batch
+  importResult.message = message
+  resultVisible.value = true
+}
 
 function handleFileChange(file) {
   selectedFile.value = file.raw
@@ -93,15 +220,17 @@ async function handleUpload() {
   uploading.value = true
   try {
     const res = await uploadImportApi(selectedFile.value)
-    ElMessage.success(
-      `导入完成：成功 ${res.data.success_rows} 条，失败 ${res.data.fail_rows} 条`
-    )
+    const batch = res.data
+    showResult(batch.fail_rows > 0 ? 'partial' : 'success', batch)
     selectedFile.value = null
-    await loadBatches()
+    uploadRef.value?.clearFiles()
   } catch (e) {
-    // 错误提示已由 request 拦截器弹出（含后端表头校验等原因）
+    const { batch, message } = parseUploadError(e)
+    showResult('failed', batch, message)
   } finally {
     uploading.value = false
+    // 成功或失败都会产生批次记录，统一刷新
+    loadBatches().catch(() => {})
   }
 }
 
@@ -158,5 +287,12 @@ onMounted(loadBatches)
 }
 .upload-btn {
   margin-top: 16px;
+}
+.import-result {
+  padding: 8px 0 0;
+}
+.result-desc {
+  width: 460px;
+  text-align: left;
 }
 </style>

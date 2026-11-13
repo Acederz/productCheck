@@ -6,6 +6,7 @@ import bcrypt
 
 from app.constants import ROLE_ADMIN, ROLE_OPERATOR
 from app.extensions import db
+from app.utils.time_utils import fmt_beijing
 
 
 class User(db.Model):
@@ -46,7 +47,7 @@ class User(db.Model):
             "username": self.username,
             "role": self.role,
             "is_active": self.is_active,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": fmt_beijing(self.created_at),
         }
 
 
